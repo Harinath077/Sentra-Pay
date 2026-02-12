@@ -1,0 +1,57 @@
+# Firebase Secrets - NEVER COMMIT
+firebase-service-account.json
+google-services.json
+GoogleService-Info.plist
+.firebase/
+firebase-debug.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Backend
+Backend/*.db
+Backend/*.sqlite
+Backend/.env
+Backend/logs/
+Backend/uploads/
+
+# Flutter
+Sentra Pay/.dart_tool/
+Sentra Pay/.flutter-plugins
+Sentra Pay/.flutter-plugins-dependencies
+Sentra Pay/.packages
+Sentra Pay/build/
+Sentra Pay/.pub-cache/
+Sentra Pay/.pub/
+Sentra Pay/ios/Pods/
+Sentra Pay/ios/.symlinks/
+Sentra Pay/android/.gradle/
+Sentra Pay/android/app/debug
+Sentra Pay/android/app/profile
+Sentra Pay/android/app/release
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+*.log

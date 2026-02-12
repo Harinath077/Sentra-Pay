@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========== USER PROFILES ==========
+    // Users can only read and write their own profile
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Prevent deletion
+    }
+    
+    // ========== TRANSACTIONS ==========
+    // Users can create transactions and read their own
+    match /transactions/{transactionId} {
+      allow read: if request.auth != null && 
+                     resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if false; // Transactions are immutable
+      allow delete: if false; // Transactions cannot be deleted
+    }
+    
+    // ========== FRAUD REPORTS ==========
+    // All authenticated users can read fraud reports
+    // Users can add reports but not delete them
+    match /fraudReports/{vpa} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null &&
+                       request.resource.data.reportCount > resource.data.reportCount;
+      allow delete: if false; // Fraud reports are permanent
+    }
+    
+    // ========== ANALYTICS (Optional) ==========
+    // Global analytics data - read-only for all users
+    match /analytics/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only backend can write
+    }
+  }
+}
