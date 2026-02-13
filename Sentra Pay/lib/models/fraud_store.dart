@@ -15,6 +15,10 @@ class RiskAnalysisResult {
   final double amountScore;
   final double receiverScore;
   final String? transactionId; // Transaction ID from backend
+  final String? icon;
+  final String? color;
+  final String? background;
+  final String? label;
 
   RiskAnalysisResult({
     required this.score,
@@ -25,6 +29,10 @@ class RiskAnalysisResult {
     this.amountScore = 0.0,
     this.receiverScore = 0.0,
     this.transactionId,
+    this.icon,
+    this.color,
+    this.background,
+    this.label,
   });
 }
 
@@ -101,7 +109,10 @@ class FraudStore {
 
   static void report(String id) {
     _reportedIDs.add(id);
-    _receiverReputation[id] = 1.0; // Mark as high risk
+    _receiverReputation[id] = 1.0; // Mark local as high risk
+    
+    // Call Backend (Fire and forget)
+    ApiService.reportFraud(id);
   }
 
   static bool isReported(String id) {
@@ -160,11 +171,12 @@ class FraudStore {
   }
 
   // ADDED ASYNC VERSION FOR BACKEND CALLS
-  static Future<RiskAnalysisResult> analyzeRiskAsync(String recipientId, double amount, {UserProfile? user}) async {
+  static Future<RiskAnalysisResult> analyzeRiskAsync(String recipientId, double amount, {UserProfile? user, String? token}) async {
     // 1. Try to get result from backend
     final result = await ApiService.analyzeRisk(
       receiverUpi: recipientId,
       amount: amount,
+      token: token ?? "demo-token", // Pass fallback if null here or let ApiService handle
     );
 
     if (result != null) {

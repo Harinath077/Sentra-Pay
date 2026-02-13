@@ -2,10 +2,106 @@ import 'package:flutter/material.dart';
 import '../models/transaction_history.dart';
 import '../theme/app_theme.dart';
 import '../widgets/risk_trend_graph.dart';
+import '../services/api_service.dart';
+import 'package:provider/provider.dart';
+import '../models/auth_provider.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  List<Transaction> _history = [];
+  bool _isLoading = true;
+  String _trustTier = "Bronze";
+  double _trustScore = 50.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHistory();
+  }
+
+  DateTime _parseTimestamp(dynamic input) {
+    String ts = input?.toString() ?? '';
+    // If empty, return now
+    if (ts.isEmpty) return DateTime.now();
+    
+    // Assume UTC if no timezone info and looks like ISO date
+    if (!ts.endsWith('Z') && !ts.contains('+')) {
+      ts += 'Z';
+    }
+    
+    return DateTime.tryParse(ts)?.toLocal() ?? DateTime.now();
+  }
+
+  Future<void> _fetchHistory() async {
+    // 1. Fetch from backend
+    // Since we don't have a real token stored in this demo flow yet,
+    // we'll try to use a dummy one or skip if not implemented.
+    // For now, let's mix local + backend.
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.token ?? "demo-token";
+      final backendData = await ApiService.getTransactionHistory(token);
+      
+      if (backendData.isNotEmpty) {
+        final List<Transaction> backendTransactions = backendData.map((data) {
+          return Transaction(
+            id: data['transaction_id'] ?? 'unknown',
+            recipient: data['receiver'] ?? 'Unknown',
+            amount: (data['amount'] ?? 0).toDouble(),
+            riskScore: (data['risk_score'] ?? 0).toDouble(),
+            riskCategory: data['risk_level'] ?? 'LOW',
+            // Handle UTC timestamp from backend
+            timestamp: _parseTimestamp(data['timestamp']),
+            wasBlocked: (data['status'] ?? '').toString().toUpperCase() == 'BLOCKED',
+          );
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _history = backendTransactions;
+            _isLoading = false;
+            
+            // Calculate trust score based on history for now
+            // In a real app, we'd fetch the user profile for accurate trust score
+            if (_history.isNotEmpty) {
+               // Simple calculation for UI feedback
+               int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
+               _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
+            }
+            
+            _trustTier = TransactionHistory.getTrustTier();
+          });
+        }
+      } else {
+        // Backend returned empty, maybe new user or failure.
+        // If empty list, check if we should show dummy data or just empty state.
+        // For demo purposes, if empty, we fall back to dummy data so the UI isn't empty.
+        _loadLocalHistory();
+      }
+    } catch (e) {
+      print("Error fetching history: $e");
+      _loadLocalHistory();
+    }
+  }
+
+  void _loadLocalHistory() {
+     if (mounted) {
+      setState(() {
+        _history = TransactionHistory.getRecentTransactions(20);
+        _isLoading = false;
+        _trustScore = TransactionHistory.getTrustScore(); 
+        _trustTier = TransactionHistory.getTrustTier();
+      });
+     }
+  }
+  
   Color _getRiskColor(double score) {
     if (score < 0.35) return const Color(0xFF10B981);
     if (score < 0.65) return const Color(0xFFF59E0B);
@@ -17,6 +113,36 @@ class HistoryScreen extends StatelessWidget {
     if (score < 0.65) return Icons.warning_amber_rounded;
     return Icons.dangerous;
   }
+  
+  IconData _getTierIcon(String tier) {
+    switch (tier) {
+      case "Platinum":
+        return Icons.workspace_premium;
+      case "Gold":
+        return Icons.stars;
+      case "Silver":
+        return Icons.star;
+      default:
+        return Icons.shield;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inSeconds < 60) {
+      return "Just now";
+    } else if (diff.inMinutes < 60) {
+      return "${diff.inMinutes}m ago";
+    } else if (diff.inHours < 24) {
+      return "${diff.inHours}h ago";
+    } else if (diff.inDays < 7) {
+      return "${diff.inDays}d ago";
+    } else {
+      return "${date.day}/${date.month}/${date.year}";
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,10 +152,7 @@ class HistoryScreen extends StatelessWidget {
     final textColor = isDark ? AppTheme.darkTextPrimary : const Color(0xFF0F172A);
     final secondaryColor = isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B);
 
-    final history = TransactionHistory.getRecentTransactions(10);
-    final trustScore = TransactionHistory.getTrustScore();
-    final trustTier = TransactionHistory.getTrustTier();
-    final riskTrend = TransactionHistory.getRiskTrend(10);
+    final riskTrend = TransactionHistory.getRiskTrend(10); // Still using local calc for graph
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -45,8 +168,21 @@ class HistoryScreen extends StatelessWidget {
           "Transaction History",
           style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16),
         ),
+        actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              color: textColor,
+              onPressed: () {
+                setState(() => _isLoading = true);
+                _fetchHistory();
+              },
+            ),
+        ],
       ),
-      body: SingleChildScrollView(
+      body: _isLoading 
+        ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+        : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -75,13 +211,13 @@ class HistoryScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        _getTierIcon(trustTier),
+                        _getTierIcon(_trustTier),
                         color: Colors.white,
                         size: 32,
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        "$trustTier User",
+                        "$_trustTier User",
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 24,
@@ -92,7 +228,7 @@ class HistoryScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    "${trustScore.toStringAsFixed(0)}%",
+                    "${_trustScore.toStringAsFixed(0)}%",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 48,
@@ -117,7 +253,7 @@ class HistoryScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      "${history.length} transactions analyzed",
+                      "${_history.length} transactions analyzed",
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -149,9 +285,9 @@ class HistoryScreen extends StatelessWidget {
                     color: textColor,
                   ),
                 ),
-                if (history.isNotEmpty)
+                if (_history.isNotEmpty)
                   Text(
-                    "${history.length} total",
+                    "${_history.length} total",
                     style: TextStyle(
                       fontSize: 14,
                       color: secondaryColor,
@@ -163,7 +299,7 @@ class HistoryScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Transaction List
-            if (history.isEmpty)
+            if (_history.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(40.0),
@@ -196,7 +332,7 @@ class HistoryScreen extends StatelessWidget {
                 ),
               )
             else
-              ...history.map((transaction) => _buildTransactionCard(
+              ..._history.map((transaction) => _buildTransactionCard(
                     transaction,
                     cardColor,
                     textColor,
@@ -308,33 +444,5 @@ class HistoryScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  IconData _getTierIcon(String tier) {
-    switch (tier) {
-      case "Platinum":
-        return Icons.workspace_premium;
-      case "Gold":
-        return Icons.stars;
-      case "Silver":
-        return Icons.star;
-      default:
-        return Icons.shield;
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
-    if (diff.inMinutes < 60) {
-      return "${diff.inMinutes}m ago";
-    } else if (diff.inHours < 24) {
-      return "${diff.inHours}h ago";
-    } else if (diff.inDays < 7) {
-      return "${diff.inDays}d ago";
-    } else {
-      return "${date.day}/${date.month}/${date.year}";
-    }
   }
 }

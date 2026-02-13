@@ -63,19 +63,21 @@ class ApiService {
   static Future<RiskAnalysisResult?> analyzeRisk({
     required String receiverUpi,
     required double amount,
-    String? userId, // Optional, implies Auth
+    String? token,
     String? note,
   }) async {
     try {
-      // TODO: Add Authorization header when Token storage is implemented
+      final headers = {"Content-Type": "application/json"};
+      if (token != null && token.isNotEmpty) {
+        headers["Authorization"] = "Bearer $token";
+      }
+
       final response = await http.post(
         Uri.parse("$baseUrl/payment/intent"),
-        headers: {"Content-Type": "application/json"},
-        // Note: userId is usually handled by token, but we'll stick to body if backend supports it or ignore it
+        headers: headers,
         // Backend expects: amount, receiver, note, device_id
         body: jsonEncode({
-          "amount": amount, // Backend might expect paise if int, but payment.py says float is OK? 
-          // Wait, backend model PaymentIntentRequest: val > 0.
+          "amount": amount,
           "receiver": receiverUpi,
           "note": note ?? "Transfer",
           "device_id": "DEV-APP-001" 
@@ -127,6 +129,10 @@ class ApiService {
           amountScore: amountScore,
           receiverScore: receiverScore,
           transactionId: data['transaction_id'], // Extract transaction ID from backend
+          icon: data['icon'],
+          color: data['color'],
+          background: data['background'],
+          label: data['label'],
         );
       } else {
         print("Backend Risk Check Failed: ${response.statusCode} - ${response.body}");
@@ -234,6 +240,48 @@ class ApiService {
       print("Payment Status Error: $e");
     }
     return null;
+  }
+
+  static Future<List<dynamic>> getTransactionHistory(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse("$baseUrl/payment/history"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print("History Fetch Failed: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("History Error: $e");
+    }
+    return [];
+  }
+
+  static Future<void> reportFraud(String receiverUpi) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/receiver/report"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "vpa": receiverUpi,
+          "reason": "User reported from app",
+        }),
+      ).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        print("Reported fraud successfully.");
+      } else {
+        print("Report Failed: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Report Error: $e");
+    }
   }
 
   // Helper to create offline user when backend is down

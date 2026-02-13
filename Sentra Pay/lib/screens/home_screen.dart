@@ -11,6 +11,7 @@ import 'qr_scanner_screen.dart';
 import 'settings_screen.dart';
 
 import 'analytics_screen.dart';
+import '../widgets/security_analysis_loader.dart';
 import '../models/fraud_store.dart';
 import '../models/auth_provider.dart';
 import '../models/settings_provider.dart';
@@ -131,58 +132,65 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    setState(() {
-      _isProcessing = true;
-    });
+    // Hide keyboard
+    FocusScope.of(context).unfocus();
 
+    RiskAnalysisResult? riskResult;
+    String? error;
+
+    // Start Backend Call Immediately
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final amount = double.tryParse(_amountController.text) ?? 0.0;
+    final recipientId = _recipientController.text;
+
+    // Fire API call in parallel
+    var apiFuture = FraudStore.analyzeRiskAsync(
+      recipientId,
+      amount,
+      user: authProvider.currentUser,
+      token: authProvider.token,
+    ).then((result) => riskResult = result)
+     .catchError((e) => error = e.toString());
+
+    // Show Security Loader (Minimum 2.5s duration)
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => SecurityAnalysisLoader(
+        onComplete: () {
+          Navigator.of(ctx).pop(); // Close dialog
+        },
+      ),
+    );
+
+    // Ensure API is done
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final amount = double.tryParse(_amountController.text) ?? 0.0;
-      final recipientId = _recipientController.text;
-
-      // CALL BACKEND MODELLING
-      final riskResult = await FraudStore.analyzeRiskAsync(
-        recipientId,
-        amount,
-        user: authProvider.currentUser,
-      );
-
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-        
-        // Save transaction to history
-        FraudStore.addTransaction(
-          receiver: recipientId,
-          amount: amount,
-          risk: riskResult.category == RiskCategory.high 
-              ? 'high' 
-              : (riskResult.category == RiskCategory.medium ? 'medium' : 'low'),
-          timestamp: DateTime.now(),
-        );
-        
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EnhancedRiskResultScreen(
-              amount: amount,
-              recipient: _receiverInfo?.name ?? "Unknown",
-              riskResult: riskResult, // Pass the backend result
-              transactionId: riskResult.transactionId, // Pass transaction ID for confirmation
-            ),
-          ),
-        );
-      }
+      await apiFuture;
     } catch (e) {
+      error = e.toString();
+    }
+
+    if (error != null) {
       if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error analyzing transaction: $e')),
+           SnackBar(content: Text('Error analyzing transaction: $error')),
         );
       }
+      return;
+    }
+
+    if (mounted && riskResult != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EnhancedRiskResultScreen(
+            amount: amount,
+            recipient: _receiverInfo?.name ?? "Unknown",
+            riskResult: riskResult!,
+            transactionId: riskResult!.transactionId,
+          ),
+        ),
+      );
     }
   }
 

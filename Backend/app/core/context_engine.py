@@ -82,6 +82,11 @@ def get_user_context(user_id: str, receiver: Optional[str] = None, db: Optional[
         receiver_info = None
         if receiver:
             receiver_info = get_receiver_reputation(receiver, db)
+            
+            # Check if this specific user has paid this receiver before
+            # This overrides the global "is_new" flag from receiver reputation
+            is_new_for_user = check_new_receiver(user_id, receiver, db)
+            receiver_info["is_new"] = is_new_for_user
         
         return UserContext(
             user_profile=user_profile,
@@ -129,7 +134,8 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     
     internal_user_id = user_orm.id
 
-    now = datetime.utcnow()
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
     thirty_days_ago = now - timedelta(days=30)
     seven_days_ago = now - timedelta(days=7)
     one_hour_ago = now - timedelta(hours=1)
@@ -139,7 +145,7 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     txns_30d = db.query(Transaction).filter(
         Transaction.user_id == internal_user_id,
         Transaction.created_at >= thirty_days_ago,
-        Transaction.status == "COMPLETED"
+        Transaction.status == "success"
     ).all()
     
     avg_amount_30d = 0.0
@@ -166,7 +172,7 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     failed_txn_count_7d = db.query(Transaction).filter(
         Transaction.user_id == internal_user_id,
         Transaction.created_at >= seven_days_ago,
-        Transaction.status == "FAILED"
+        Transaction.status == "failed"
     ).count()
     
     # Days since last transaction
@@ -252,22 +258,32 @@ def get_receiver_reputation(receiver: str, db: Session) -> Dict:
 def check_new_receiver(user_id: str, receiver: str, db: Session) -> bool:
     """
     Check if receiver is new for this user.
+    Uses dedicated ReceiverHistory table for efficiency.
     
     Args:
-        user_id: User identifier
+        user_id: User identifier (public ID string)
         receiver: Receiver UPI/identifier
         db: Database session
     
     Returns:
-        True if receiver is new, False otherwise
+        True if receiver is new (never successfully paid), False otherwise
     """
-    existing_txn = db.query(Transaction).filter(
-        Transaction.user_id == user_id,
-        Transaction.receiver == receiver,
-        Transaction.status == "COMPLETED"
+    # Fix: User ID lookup (Resolve string user_id to int pk)
+    # The models use int PK for foreign keys but string for public ID
+    user_orm = db.query(User).filter(User.user_id == user_id).first()
+    if not user_orm:
+        return True  # Safe default
+        
+    # Check dedicated history table
+    from app.database.models import ReceiverHistory
+    
+    history_record = db.query(ReceiverHistory).filter(
+        ReceiverHistory.user_id == user_orm.id,
+        ReceiverHistory.receiver_upi == receiver
     ).first()
     
-    return existing_txn is None
+    # If record exists, they have paid before
+    return history_record is None
 
 
 def get_transaction_history(user_id: str, days: int = 30, db: Optional[Session] = None) -> List[Dict]:
@@ -288,7 +304,8 @@ def get_transaction_history(user_id: str, days: int = 30, db: Optional[Session] 
         close_db = True
     
     try:
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        from datetime import timezone
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
         
         transactions = db.query(Transaction).filter(
             Transaction.user_id == user_id,

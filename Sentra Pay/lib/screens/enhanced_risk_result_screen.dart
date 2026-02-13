@@ -88,18 +88,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
       _amountScore = result.amountScore;
     });
 
-    // Save to history
-    TransactionHistory.addTransaction(
-      Transaction(
-        id: "TXN-${DateTime.now().millisecondsSinceEpoch}",
-        recipient: widget.recipient,
-        amount: widget.amount,
-        riskScore: _riskScore,
-        riskCategory: _riskCategory.toString().split('.').last,
-        timestamp: DateTime.now(),
-        wasBlocked: result.isBlocked,
-      ),
-    );
+
   }
 
   void _reportFraud() {
@@ -121,6 +110,28 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
     if (result['status'] == 'success') {
       // Payment successful! Navigate to success screen
       if (mounted) {
+        // Log successful transaction
+        TransactionHistory.addTransaction(
+          Transaction(
+            id: widget.transactionId ?? "TXN-${DateTime.now().millisecondsSinceEpoch}",
+            recipient: widget.recipient,
+            amount: widget.amount,
+            riskScore: _riskScore,
+            riskCategory: _riskCategory.toString().split('.').last,
+            timestamp: DateTime.now(),
+            wasBlocked: false,
+          ),
+        );
+
+        FraudStore.addTransaction(
+          receiver: widget.recipient,
+          amount: widget.amount,
+          risk: _riskCategory == RiskCategory.high 
+              ? 'high' 
+              : (_riskCategory == RiskCategory.medium ? 'medium' : 'low'),
+          timestamp: DateTime.now(),
+        );
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -155,6 +166,17 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
 
   Color _getRiskColor() {
     if (_isUserReported || !_isSafe) return AppTheme.errorColor;
+    
+    // If backend provided a color, use it
+    if (widget.riskResult?.color != null) {
+      try {
+        final colorStr = widget.riskResult!.color!.replaceFirst('#', '0xFF');
+        return Color(int.parse(colorStr));
+      } catch (e) {
+        print("Error parsing backend color: $e");
+      }
+    }
+
     if (_riskScore < 0.4) return AppTheme.successColor;
     if (_riskScore < 0.7) return Colors.orange;
     return AppTheme.errorColor;
@@ -162,6 +184,12 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
 
   String _getRiskTitle() {
     if (_isUserReported || !_isSafe) return "Fraud Detected";
+    
+    // If backend provided a label, use it
+    if (widget.riskResult?.label != null) {
+      return widget.riskResult!.label!;
+    }
+
     switch (_riskCategory) {
       case RiskCategory.low:
         return "Low Risk Detected";
@@ -539,7 +567,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                               if (widget.transactionId != null) {
                                 // Get auth token
                                 final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                                final token = authProvider.currentUser?.deviceId ?? ''; // Use device ID as temp token
+                                final token = authProvider.token ?? "demo-token";
                                 
                                 // Show loading dialog
                                 showDialog(
@@ -614,6 +642,28 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                         await Future.delayed(const Duration(seconds: 3));
                                         
                                         if (result['status'] == 'success' && mounted) {
+                                          // Log successful transaction
+                                          TransactionHistory.addTransaction(
+                                            Transaction(
+                                              id: widget.transactionId ?? "TXN-${DateTime.now().millisecondsSinceEpoch}",
+                                              recipient: widget.recipient,
+                                              amount: widget.amount,
+                                              riskScore: _riskScore,
+                                              riskCategory: _riskCategory.toString().split('.').last,
+                                              timestamp: DateTime.now(),
+                                              wasBlocked: false,
+                                            ),
+                                          );
+
+                                          FraudStore.addTransaction(
+                                            receiver: widget.recipient,
+                                            amount: widget.amount,
+                                            risk: _riskCategory == RiskCategory.high 
+                                                ? 'high' 
+                                                : (_riskCategory == RiskCategory.medium ? 'medium' : 'low'),
+                                            timestamp: DateTime.now(),
+                                          );
+                                          
                                           Navigator.pushReplacement(
                                             context,
                                             MaterialPageRoute(

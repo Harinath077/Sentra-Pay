@@ -6,6 +6,7 @@ import '../services/firebase_auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserProfile? _currentUser;
+  String? _token; // Added token management
   bool _isAuthenticated = false;
   bool _isBiometricEnabled = true;
   String? _errorMessage;
@@ -15,6 +16,7 @@ class AuthProvider extends ChangeNotifier {
   final FirebaseAuthService _firebaseAuth = FirebaseAuthService();
 
   UserProfile? get currentUser => _currentUser;
+  String? get token => _token;
   bool get isAuthenticated => _isAuthenticated;
   bool get isBiometricEnabled => _isBiometricEnabled;
   String? get errorMessage => _errorMessage;
@@ -31,11 +33,15 @@ class AuthProvider extends ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 1500));
     
     // Auto-login with demo account (now using Firebase in background)
-    final demoUser = _users['gopal@gmail.com']!;
-    _currentUser = UserProfile.fromJson(demoUser['profile']);
-    _isAuthenticated = true;
-    notifyListeners();
-    return true;
+    if (_users.containsKey('gopal@gmail.com')) {
+      final demoUser = _users['gopal@gmail.com']!;
+      _currentUser = UserProfile.fromJson(demoUser['profile']);
+      _token = "demo-token"; // Set demo token
+      _isAuthenticated = true;
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 
   // Simulated user database (for demo purposes)
@@ -167,6 +173,7 @@ class AuthProvider extends ChangeNotifier {
         final userData = _users[email]!;
         if (userData['password'] == password) {
           _currentUser = UserProfile.fromJson(userData['profile']);
+          _token = "demo-token"; // Set demo token
           _isAuthenticated = true;
           _isLoading = false;
           notifyListeners();
@@ -186,6 +193,7 @@ class AuthProvider extends ChangeNotifier {
         final userData = _users[email]!;
         if (userData['password'] == password) {
           _currentUser = UserProfile.fromJson(userData['profile']);
+          _token = "demo-token"; // Set demo token
           _isAuthenticated = true;
           _isLoading = false;
           notifyListeners();
@@ -283,6 +291,7 @@ class AuthProvider extends ChangeNotifier {
         commonVPAs: [],
       );
       
+      _token = "demo-token";
       _isAuthenticated = true;
       _isLoading = false;
       notifyListeners();

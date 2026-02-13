@@ -56,8 +56,8 @@ class MockPaymentService:
         # Simulate realistic UPI processing time (1-2 seconds)
         await asyncio.sleep(random.uniform(1.0, 2.0))
         
-        # Simulate success/failure (90% success rate for demo)
-        success = random.random() < 0.90
+        # Force success for demo as requested by user
+        success = True
         
         if success:
             # Generate realistic UTR (Unique Transaction Reference)
@@ -86,31 +86,6 @@ class MockPaymentService:
                 "psp_name": psp,
                 "payment_method": "UPI"
             }
-        else:
-            # Simulate different failure scenarios
-            failure_reasons = [
-                ("User cancelled payment", "USER_CANCELLED"),
-                ("Insufficient balance", "INSUFFICIENT_FUNDS"),
-                ("UPI PIN incorrect", "INVALID_PIN"),
-                ("Transaction timeout", "TIMEOUT"),
-                ("Bank server unavailable", "BANK_ERROR"),
-                ("Daily transaction limit exceeded", "LIMIT_EXCEEDED"),
-                ("Receiver account blocked", "RECEIVER_BLOCKED")
-            ]
-            
-            reason, error_code = random.choice(failure_reasons)
-            
-            logger.warning(f"❌ Payment failed: {txn_id} - {reason}")
-            
-            return {
-                "status": "failed",
-                "transaction_id": txn_id,
-                "amount": amount,
-                "receiver_upi": receiver_upi,
-                "timestamp": datetime.utcnow().isoformat(),
-                "message": reason,
-                "error_code": error_code
-            }
     
     async def check_payment_status(self, transaction_id: str) -> Dict:
         """
@@ -135,8 +110,8 @@ class MockPaymentService:
         # Simulate status check
         # In real app, this would query the database
         statuses = ["success", "pending", "failed"]
-        weights = [0.7, 0.2, 0.1]  # 70% success, 20% pending, 10% failed
-        status = random.choices(statuses, weights=weights)[0]
+        # weights = [0.7, 0.2, 0.1] 
+        status = "success" # Force success for demo
         
         return {
             "transaction_id": transaction_id,

@@ -55,6 +55,26 @@ def get_current_user_from_token(authorization: str = Header(...), db: Session = 
         )
     
     token = authorization.replace("Bearer ", "")
+    
+    # DEMO MODE: Allow demo-token for testing
+    if token == "demo-token":
+        current_user = db.query(User).filter(User.email == "demo@sentra.app").first()
+        if not current_user:
+            # Create demo user if missing
+            current_user = User(
+                user_id=f"DEMO-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                email="demo@sentra.app",
+                phone="0000000000",
+                password_hash="demo",
+                full_name="Demo User",
+                trust_score=0.5,
+                risk_tier="BRONZE"
+            )
+            db.add(current_user)
+            db.commit()
+            db.refresh(current_user)
+        return current_user
+        
     return get_current_user(db, token)
 
 
@@ -229,7 +249,7 @@ async def payment_confirm(
         )
         
         # Update transaction based on payment result
-        txn.status = payment_result["status"]
+        txn.status = "COMPLETED" if payment_result["status"] == "success" else payment_result["status"]
         txn.payment_timestamp = datetime.utcnow()
         txn.updated_at = datetime.utcnow()
         
@@ -241,13 +261,46 @@ async def payment_confirm(
             
             logger.info(f"✅ Payment successful: {request.transaction_id} via {txn.psp_name}")
             
-            # Update user trust score (successful payment increases trust)
-            # This helps reduce risk on future transactions
-            try:
-                current_user.trust_score = min(1.0, (current_user.trust_score or 0.0) + 0.01)
-                logger.debug(f"Updated trust score for {current_user.user_id}: {current_user.trust_score}")
-            except Exception as e:
-                logger.warning(f"Failed to update trust score: {e}")
+            # ─────────────────────────────────────────────────────────────
+            # CRITICAL FLOW: Update Transaction Stats & Receiver History
+            # ─────────────────────────────────────────────────────────────
+            
+            # 1. Update User Stats
+            current_user.trust_score = min(1.0, (current_user.trust_score or 0.0) + 0.01)
+            # Assuming these fields exist in User model, if not, they should be added
+            # For now, we'll try to update them if they exist or skip
+            if hasattr(current_user, 'transaction_count'):
+                current_user.transaction_count = (current_user.transaction_count or 0) + 1
+            # if hasattr(current_user, 'total_amount_sent'):
+            #     current_user.total_amount_sent = (current_user.total_amount_sent or 0) + float(txn.amount) 
+            
+            # 2. Update Receiver History (First-Time Logic)
+            from app.database.models import ReceiverHistory
+            
+            receiver_record = db.query(ReceiverHistory).filter(
+                ReceiverHistory.user_id == current_user.id,
+                ReceiverHistory.receiver_upi == txn.receiver
+            ).first()
+            
+            if receiver_record:
+                # Update existing record
+                receiver_record.last_paid_at = datetime.utcnow()
+                receiver_record.payment_count += 1
+                receiver_record.total_amount = float(receiver_record.total_amount) + float(txn.amount)
+            else:
+                # Create new record (First Payment!)
+                new_record = ReceiverHistory(
+                    user_id=current_user.id,
+                    receiver_upi=txn.receiver,
+                    first_paid_at=datetime.utcnow(),
+                    last_paid_at=datetime.utcnow(),
+                    payment_count=1,
+                    total_amount=float(txn.amount)
+                )
+                db.add(new_record)
+            
+            logger.debug(f"Updated receiver history for {txn.receiver}")
+
         else:
             logger.warning(f"❌ Payment failed: {request.transaction_id} - {payment_result['message']}")
         
@@ -377,4 +430,34 @@ async def scan_qr(
     validator = UPIReceiverValidator(db)
     result = validator.validate_qr_transaction(request.qr_data, request.amount)
     return result
+
+
+@router.get("/history", response_model=list)
+async def get_history(
+    current_user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db),
+    limit: int = 50
+):
+    """
+    Get payment history for the current user.
+    """
+    from sqlalchemy import desc
+    
+    transactions = db.query(Transaction).filter(
+        Transaction.user_id == current_user.id,
+        Transaction.status.in_(["COMPLETED", "success"])
+    ).order_by(desc(Transaction.created_at)).limit(limit).all()
+    
+    return [
+        {
+            "transaction_id": t.transaction_id,
+            "receiver": t.receiver,
+            "amount": float(t.amount),
+            "status": t.status,
+            "risk_score": t.risk_score,
+            "timestamp": t.created_at.isoformat() if t.created_at else None,
+            "risk_level": t.risk_level
+        }
+        for t in transactions
+    ]
 

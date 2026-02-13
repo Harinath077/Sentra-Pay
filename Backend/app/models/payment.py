@@ -90,6 +90,12 @@ class PaymentIntentResponse(BaseModel):
     can_proceed: bool
     requires_otp: bool
     
+    # New UI Fields for Frontend Rendering
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    background: Optional[str] = None
+    label: Optional[str] = None
+    
     # Risk analysis
     risk_breakdown: RiskBreakdown
     risk_factors: List[RiskFactor]

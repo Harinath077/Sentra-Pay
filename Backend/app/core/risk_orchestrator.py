@@ -13,7 +13,8 @@ from app.core.context_engine import get_user_context
 from app.core.rules_engine import evaluate as evaluate_rules
 from app.core.ml_engine import predict as ml_predict
 from app.core.decision_engine import get_action
-from app.database.models import RiskEvent
+from app.core.genai_engine import genai  # 🍌 Import Gemini Banana
+from app.database.models import RiskEvent, Transaction
 from app.database.connection import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -35,28 +36,6 @@ class RiskOrchestrator:
     ) -> Dict:
         """
         Main orchestration method - THE BRAIN.
-        
-        Flow:
-        1. Gather user context (Redis → PostgreSQL)
-        2. Run rules engine → rule_score, flags, potential hard block
-        3. Run ML engine → ml_score
-        4. Combine scores (weighted average with rule overrides)
-        5. Map to action (decision engine)
-        6. Build comprehensive response
-        7. Log risk event
-        
-        Args:
-            txn_data: {
-                "amount": float,
-                "receiver": str,
-                "note": str (optional),
-                "device_id": str (optional)
-            }
-            user_id: Authenticated user ID
-            db: Database session (creates new if not provided)
-        
-        Returns:
-            Complete risk analysis response with score, action, breakdown
         """
         close_db = False
         if not db:
@@ -66,8 +45,31 @@ class RiskOrchestrator:
         try:
             transaction_id = self._generate_transaction_id()
             receiver = txn_data.get("receiver", "")
+            amount = txn_data.get("amount", 0.0)
             
             logger.info(f"🧠 Orchestrating risk analysis: {transaction_id} - User: {user_id}")
+            
+            # Get User PK (int) first
+            from app.database.models import User
+            user_orm = db.query(User).filter(User.user_id == user_id).first()
+            if not user_orm:
+                raise ValueError(f"User not found: {user_id}")
+            
+            # Create PENDING Transaction Record (for FK and confirmation)
+            txn_params = {
+                "transaction_id": transaction_id,
+                "user_id": user_orm.id,
+                "amount": amount,
+                "receiver": receiver,
+                "note": txn_data.get("note", ""),
+                "status": "PENDING",
+                "device_id": txn_data.get("device_id", "")
+            }
+            
+            new_txn = Transaction(**txn_params)
+            db.add(new_txn)
+            db.commit()
+            db.refresh(new_txn)  # Get ID (int PK)
             
             # ──────────────────────────────────────────────
             # STEP 1: GATHER CONTEXT
@@ -83,13 +85,22 @@ class RiskOrchestrator:
             # Check for hard blocks (override everything)
             if rule_result.hard_block:
                 logger.warning(f"⛔ HARD BLOCK: {rule_result.block_reason}")
+                
+                # Update Transaction status to BLOCKED & Risk Score 1.0
+                new_txn.status = "BLOCKED"
+                new_txn.risk_score = 1.0
+                new_txn.risk_level = "VERY_HIGH"
+                new_txn.action_taken = "BLOCK"
+                db.commit()
+                
                 return self._create_blocked_response(
                     transaction_id=transaction_id,
                     reason=rule_result.block_reason,
                     txn_data=txn_data,
                     context=context,
                     db=db,
-                    user_id=user_id
+                    user_id=user_orm.id, # Pass int PK
+                    txn_pk=new_txn.id # Pass int PK
                 )
             
             logger.info(f"✓ Rules score: {rule_result.rule_score:.2f} - Flags: {rule_result.flags}")
@@ -122,6 +133,15 @@ class RiskOrchestrator:
             )
             logger.info(f"✓ Action: {action_result.action} ({action_result.risk_level})")
             
+            # Update Transaction with results
+            new_txn.risk_score = final_score
+            new_txn.risk_level = action_result.risk_level
+            new_txn.ml_score = ml_result.ml_score
+            new_txn.rule_score = rule_result.rule_score
+            new_txn.action_taken = action_result.action
+            # status remains PENDING until confirmed
+            db.commit()
+
             # ──────────────────────────────────────────────
             # STEP 6: BUILD RESPONSE
             # ──────────────────────────────────────────────
@@ -139,8 +159,8 @@ class RiskOrchestrator:
             # STEP 7: LOG RISK EVENT
             # ──────────────────────────────────────────────
             self._log_risk_event(
-                user_id=user_id,
-                transaction_id=transaction_id,
+                user_id=user_orm.id, # Pass int PK
+                transaction_id=new_txn.id, # Pass int PK
                 txn_data=txn_data,
                 final_score=final_score,
                 action=action_result.action,
@@ -197,7 +217,7 @@ class RiskOrchestrator:
         # Receiver Risk
         is_new_receiver = context.receiver_info.get("is_new", True)
         if is_new_receiver:
-            score += 0.30
+            score += 0.20
             # logger.info("Risk: First-time receiver (+0.30)")
 
         # Suspicious Keywords (lottery, prize, etc.)
@@ -296,12 +316,24 @@ class RiskOrchestrator:
             "risk_level": action_result.risk_level,
             "risk_percentage": int(final_score * 100),
             
-            # Action determination
             "action": action_result.action,
             "message": action_result.message,
             "can_proceed": action_result.action in ["ALLOW", "WARNING"],
             "requires_otp": action_result.requires_otp,
+
+            # UI Rendering Fields
+            "icon": "🟢" if action_result.action == "ALLOW" else ("🟠" if action_result.action == "WARNING" else ("🔵" if action_result.action == "OTP_REQUIRED" else "🔴")),
+            "color": "#4CAF50" if action_result.action == "ALLOW" else ("#FF9800" if action_result.action == "WARNING" else ("#2196F3" if action_result.action == "OTP_REQUIRED" else "#F44336")),
+            "background": "#E8F5E9" if action_result.action == "ALLOW" else ("#FFF3E0" if action_result.action == "WARNING" else ("#E3F2FD" if action_result.action == "OTP_REQUIRED" else "#FFEBEE")),
+            "label": "Safe Transaction" if action_result.action == "ALLOW" else ("Moderate Risk" if action_result.action == "WARNING" else ("Verification Required" if action_result.action == "OTP_REQUIRED" else "High Risk Blocked")),
             
+            # 🍌 Gemini GenAI Context
+            "genai_analysis": genai.generate_explanation(
+                risk_score=final_score,
+                flags=rule_result.flags,
+                receiver=receiver
+            ),
+
             # Risk breakdown (matches UI design)
             "risk_breakdown": {
                 "behavior_analysis": {
@@ -365,14 +397,15 @@ class RiskOrchestrator:
         txn_data: Dict,
         context,
         db: Session,
-        user_id: str
+        user_id: int,
+        txn_pk: int
     ) -> Dict:
         """Create response for hard-blocked transactions."""
         
         # Log the block
         self._log_risk_event(
             user_id=user_id,
-            transaction_id=transaction_id,
+            transaction_id=txn_pk,
             txn_data=txn_data,
             final_score=1.0,
             action="BLOCK",
@@ -387,14 +420,16 @@ class RiskOrchestrator:
             "risk_score": 1.0,
             "risk_level": "VERY_HIGH",
             "risk_percentage": 100,
-            "action": "BLOCK",
             "message": f"🚫 Transaction blocked: {reason}",
             "can_proceed": False,
             "requires_otp": False,
+            "icon": "🔴",
+            "color": "#F44336",
+            "background": "#FFEBEE",
+            "label": "High Risk Blocked",
             "risk_factors": [
                 {"factor": "Blacklisted Receiver", "severity": "critical"}
             ],
-            "recommendations": [
                 "This receiver has been flagged for suspicious activity",
                 "Contact support if you believe this is an error"
             ]
@@ -405,21 +440,22 @@ class RiskOrchestrator:
         score = 0
         
         # Velocity contribution
-        if "VELOCITY_SPIKE" in rule_result.flags:
+        if rule_result and "VELOCITY_SPIKE" in rule_result.flags:
             score += 40
         
         # Device change contribution
-        if "DEVICE_CHANGE" in rule_result.flags:
+        if rule_result and "DEVICE_CHANGE" in rule_result.flags:
             score += 20
         
         # Failed transaction pattern
-        if "HIGH_FAILED_TXN" in rule_result.flags:
+        if rule_result and "HIGH_FAILED_TXN" in rule_result.flags:
             score += 30
         
         # Days since last transaction
-        days_since = context.txn_stats.get("days_since_last_txn", 0)
-        if days_since > 30:
-            score += 20
+        if context:
+            days_since = context.txn_stats.get("days_since_last_txn", 0)
+            if days_since > 30:
+                score += 20
         
         return min(score, 100)
     
@@ -516,8 +552,8 @@ class RiskOrchestrator:
     
     def _log_risk_event(
         self,
-        user_id: str,
-        transaction_id: str,
+        user_id: int,
+        transaction_id: int,
         txn_data: Dict,
         final_score: float,
         action: str,
@@ -528,21 +564,22 @@ class RiskOrchestrator:
         """Log risk event to database."""
         try:
             risk_event = RiskEvent(
-                event_id=str(uuid.uuid4()),
                 user_id=user_id,
                 transaction_id=transaction_id,
-                risk_score=final_score,
-                action_taken=action,
+                final_score=final_score,
+                action=action,
                 rule_score=rule_result.rule_score if rule_result else 1.0,
                 ml_score=ml_result.ml_score if ml_result else 0.0,
-                flags=rule_result.flags if rule_result else ["HARD_BLOCK"],
-                amount=txn_data.get("amount", 0.0),
-                receiver=txn_data.get("receiver", "")
+                flags=rule_result.flags if rule_result else ["HARD_BLOCK"]
             )
+            
+            # Map features if possible
+            if ml_result and hasattr(ml_result, 'features'):
+                risk_event.features = ml_result.features
             
             db.add(risk_event)
             db.commit()
-            logger.info(f"✓ Risk event logged: {risk_event.event_id}")
+            logger.info(f"✓ Risk event logged: {risk_event.id}")
         
         except Exception as e:
             logger.error(f"Failed to log risk event: {e}")

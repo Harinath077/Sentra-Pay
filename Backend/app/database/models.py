@@ -3,7 +3,7 @@ SQLAlchemy Database Models.
 Defines all database tables for the fraud detection system.
 """
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON, Text, Numeric
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON, Text, Numeric, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database.connection import Base
@@ -173,3 +173,34 @@ class QRScan(Base):
     def __repr__(self):
         return f"<QRScan {self.upi_id} @ {self.scanned_at}>"
 
+
+
+class ReceiverHistory(Base):
+    """
+    Tracks history of payments to specific receivers by specific users.
+    Used for 'First-Time Receiver' logic.
+    """
+    __tablename__ = "receiver_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    receiver_upi = Column(String(255), nullable=False, index=True)
+    
+    first_paid_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_paid_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    
+    payment_count = Column(Integer, default=1)
+    total_amount = Column(Numeric(15, 2), default=0.00)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Ensure one record per user-receiver pair
+    __table_args__ = (
+        UniqueConstraint('user_id', 'receiver_upi', name='uix_user_receiver'),
+    )
+    
+    # Relationship
+    user = relationship("User", backref="receiver_history_records")
+
+    def __repr__(self):
+        return f"<ReceiverHistory {self.user_id} -> {self.receiver_upi} ({self.payment_count})>"
