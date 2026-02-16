@@ -430,6 +430,7 @@ class RiskOrchestrator:
             "risk_factors": [
                 {"factor": "Blacklisted Receiver", "severity": "critical"}
             ],
+            "recommendations": [
                 "This receiver has been flagged for suspicious activity",
                 "Contact support if you believe this is an error"
             ]

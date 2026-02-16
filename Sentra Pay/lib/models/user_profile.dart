@@ -74,18 +74,20 @@ class UserProfile {
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
-      userId: json['userId'],
-      securityId: json['securityId'],
-      fullName: json['fullName'],
-      email: json['email'],
-      mobile: json['mobile'],
-      profilePhotoUrl: json['profilePhotoUrl'],
-      createdAt: DateTime.parse(json['createdAt']),
-      transactionCount: json['transactionCount'] ?? 0,
-      trustScore: (json['trustScore'] ?? 100.0).toDouble(),
-      deviceId: json['deviceId'] ?? 'DEV-${Random().nextInt(9999).toString().padLeft(4, '0')}',
-      loginCount: json['loginCount'] ?? 1,
-      commonVPAs: List<String>.from(json['commonVPAs'] ?? []),
+      userId: json['user_id'] ?? json['userId'] ?? 'USER-UNKNOWN',
+      securityId: json['security_id'] ?? json['securityId'] ?? (json['user_id'] ?? 'UNKNOWN').toString().substring(0, min(8, (json['user_id'] ?? 'UNKNOWN').toString().length)),
+      fullName: json['full_name'] ?? json['fullName'] ?? 'User',
+      email: json['email'] ?? '',
+      mobile: json['phone'] ?? json['mobile'],
+      profilePhotoUrl: json['profile_photo_url'] ?? json['profilePhotoUrl'],
+      createdAt: json['created_at'] != null 
+          ? DateTime.parse(json['created_at']) 
+          : (json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now()),
+      transactionCount: json['transaction_count'] ?? json['transactionCount'] ?? 0,
+      trustScore: (json['trust_score'] ?? json['trustScore'] ?? 100.0).toDouble(),
+      deviceId: json['device_id'] ?? json['deviceId'] ?? 'DEV-${Random().nextInt(9999).toString().padLeft(4, '0')}',
+      loginCount: json['login_count'] ?? json['loginCount'] ?? 1,
+      commonVPAs: List<String>.from(json['common_vpas'] ?? json['commonVPAs'] ?? []),
     );
   }
 }

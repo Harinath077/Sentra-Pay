@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../theme/app_theme.dart';
 import '../models/fraud_store.dart';
+import '../models/auth_provider.dart';
+import '../services/api_service.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -11,265 +16,102 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   String _selectedPeriod = 'Week';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.token ?? "demo-token";
+      final backendData = await ApiService.getTransactionHistory(token);
+      
+      if (backendData.isNotEmpty) {
+        final List<Map<String, dynamic>> analyticsData = backendData.map((data) => {
+          'recipient': data['receiver'] ?? 'Unknown',
+          'amount': (data['amount'] ?? 0).toDouble(),
+          'risk': (data['risk_level'] ?? 'LOW').toString().toLowerCase(),
+          'timestamp': _parseTimestamp(data['timestamp']),
+        }).toList();
+        
+        FraudStore.syncHistory(analyticsData);
+      }
+    } catch (e) {
+      debugPrint("Error fetching analytics data: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  DateTime _parseTimestamp(dynamic input) {
+    String ts = input?.toString() ?? '';
+    if (ts.isEmpty) return DateTime.now();
+    if (!ts.endsWith('Z') && !ts.contains('+')) ts += 'Z';
+    return DateTime.tryParse(ts)?.toLocal() ?? DateTime.now();
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // Calculate real data based on transaction history
-    final transactions = FraudStore.transactionHistory;
-    final periodData = _calculatePeriodData(transactions);
-    
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBgColor : AppTheme.backgroundColor,
-      appBar: AppBar(
-        scrolledUnderElevation: 0,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          "Fraud Analytics",
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      body: _isLoading ? _buildLoadingShimmer(isDark) : _buildContent(isDark),
+    );
+  }
+
+  Widget _buildLoadingShimmer(bool isDark) {
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+      child: ListView(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Period Selector
-            Row(
-              children: [
-                _buildPeriodChip('Week', isDark),
-                const SizedBox(width: 12),
-                _buildPeriodChip('Month', isDark),
-                const SizedBox(width: 12),
-                _buildPeriodChip('Year', isDark),
-              ],
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Fraud Detection Summary
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF1E40AF), const Color(0xFF3B82F6)]
-                      : [const Color(0xFF1E40AF), const Color(0xFF60A5FA)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Fraud Prevention Summary",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          "Blocked",
-                          _getBlockedCount(),
-                          Icons.block,
-                          const Color(0xFFEF4444),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          "Protected",
-                          "₹${_getProtectedAmount()}",
-                          Icons.shield,
-                          const Color(0xFF10B981),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Risk Distribution Graph
-            Text(
-              "Risk Distribution",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkCardColor : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? AppTheme.darkBorderColor : AppTheme.borderColor,
-                ),
-              ),
-              child: Column(
-                children: [
-                  _buildRiskBar("Low Risk", 0.7, const Color(0xFF10B981), isDark),
-                  const SizedBox(height: 12),
-                  _buildRiskBar("Medium Risk", 0.25, const Color(0xFFF59E0B), isDark),
-                  const SizedBox(height: 12),
-                  _buildRiskBar("High Risk", 0.05, const Color(0xFFEF4444), isDark),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Fraud Indicators
-            Text(
-              "Fraud Indicators Detected",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildIndicatorCard(
-              "Suspicious VPA",
-              "2 blocked",
-              Icons.person_off,
-              const Color(0xFFEF4444),
-              isDark,
-            ),
-            const SizedBox(height: 12),
-            _buildIndicatorCard(
-              "Unusual Amount",
-              "1 flagged",
-              Icons.warning_amber,
-              const Color(0xFFF59E0B),
-              isDark,
-            ),
-            const SizedBox(height: 12),
-            _buildIndicatorCard(
-              "New Device",
-              "0 detected",
-              Icons.devices,
-              const Color(0xFF10B981),
-              isDark,
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Protection Stats
-            Text(
-              "Protection Statistics",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkCardColor : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? AppTheme.darkBorderColor : AppTheme.borderColor,
-                ),
-              ),
-              child: Column(
-                children: [
-                  _buildProtectionStat("Transactions Scanned", _getTotalTransactions(), isDark),
-                  const Divider(height: 24),
-                  _buildProtectionStat("Fraud Attempts Blocked", _getBlockedCount(), isDark),
-                  const Divider(height: 24),
-                  _buildProtectionStat("Success Rate", "98.5%", isDark),
-                  const Divider(height: 24),
-                  _buildProtectionStat("Money Protected", "₹${_getProtectedAmount()}", isDark),
-                ],
-              ),
-            ),
-          ],
-        ),
+        children: List.generate(5, (_) => Container(
+          height: 150,
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        )),
       ),
     );
   }
 
-  Widget _buildPeriodChip(String period, bool isDark) {
-    final isSelected = _selectedPeriod == period;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedPeriod = period;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF1E40AF)
-              : (isDark ? AppTheme.darkCardColor : Colors.white),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF1E40AF)
-                : (isDark ? AppTheme.darkBorderColor : AppTheme.borderColor),
+  Widget _buildContent(bool isDark) {
+    final transactions = FraudStore.transactionHistory;
+    final stats = _calculatePeriodData(transactions);
+    
+    return RefreshIndicator(
+      onRefresh: _fetchData,
+      child: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            elevation: 0,
+            scrolledUnderElevation: 1,
+            backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+            title: const Text("Fraud Analytics", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
           ),
-        ),
-        child: Text(
-          period,
-          style: TextStyle(
-            color: isSelected
-                ? Colors.white
-                : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.white, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
+          SliverPadding(
+            padding: const EdgeInsets.all(20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                _buildSegmentedFilter(isDark),
+                const SizedBox(height: 24),
+                _buildKPICards(stats, isDark),
+                const SizedBox(height: 24),
+                _buildRiskDistribution(stats, isDark),
+                const SizedBox(height: 24),
+                _buildTrendSection(isDark),
+                const SizedBox(height: 24),
+                _buildIndicatorsGrid(isDark),
+                const SizedBox(height: 100),
+              ]),
             ),
           ),
         ],
@@ -277,187 +119,251 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildRiskBar(String label, double percentage, Color color, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-              ),
-            ),
-            Text(
-              "${(percentage * 100).toInt()}%",
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Stack(
-          children: [
-            Container(
-              height: 8,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            FractionallySizedBox(
-              widthFactor: percentage,
+  Widget _buildSegmentedFilter(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: ['Week', 'Month', 'Year'].map((period) {
+          final isSelected = _selectedPeriod == period;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedPeriod = period),
               child: Container(
-                height: 8,
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(4),
+                  color: isSelected ? (isDark ? const Color(0xFF3B82F6) : Colors.white) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  period,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.grey,
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildKPICards(Map<String, dynamic> stats, bool isDark) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildStatCard("Fraud Blocked", stats['blocked'].toString(), AppTheme.errorColor, isDark),
+          const SizedBox(width: 16),
+          _buildStatCard("Protected", "₹${_formatAmount(stats['protected'])}", AppTheme.successColor, isDark),
+          const SizedBox(width: 16),
+          _buildStatCard("TXNs Scanned", stats['total'].toString(), AppTheme.primaryColor, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, Color color, bool isDark) {
+    return Container(
+      width: 160,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Container(
+            height: 4,
+            width: 40,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRiskDistribution(Map<String, dynamic> stats, bool isDark) {
+    final medPct = (stats['med_pct'] ?? 0.0) * 100;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Risk Distribution", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              SizedBox(
+                height: 120,
+                width: 120,
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 40,
+                    sections: [
+                      PieChartSectionData(color: AppTheme.successColor, value: (stats['low_pct'] ?? 0.1) * 100, radius: 15, title: ''),
+                      PieChartSectionData(color: AppTheme.warningColor, value: (stats['med_pct'] ?? 0.1) * 100, radius: 15, title: ''),
+                      PieChartSectionData(color: AppTheme.errorColor, value: (stats['high_pct'] ?? 0.1) * 100, radius: 15, title: ''),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildLegend("Low", AppTheme.successColor),
+                    _buildLegend("Medium", AppTheme.warningColor),
+                    _buildLegend("High", AppTheme.errorColor),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegend(String label, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrendSection(bool isDark) {
+    return Container(
+      height: 240,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Fraud Trends", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 20),
+          Expanded(
+            child: LineChart(
+              LineChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: const [FlSpot(0, 3), FlSpot(1, 1), FlSpot(2, 4), FlSpot(3, 2), FlSpot(4, 5)],
+                    isCurved: true,
+                    color: AppTheme.primaryColor,
+                    barWidth: 3,
+                    dotData: const FlDotData(show: false),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIndicatorsGrid(bool isDark) {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.2,
+      children: [
+        _buildIndicatorCard("Suspicious VPA", Icons.person_off, AppTheme.errorColor, isDark),
+        _buildIndicatorCard("Amount Spike", Icons.trending_up, AppTheme.warningColor, isDark),
+        _buildIndicatorCard("New Device", Icons.smartphone, AppTheme.primaryColor, isDark),
+        _buildIndicatorCard("Velocity", Icons.speed, Colors.purple, isDark),
       ],
     );
   }
 
-  Widget _buildIndicatorCard(String title, String subtitle, IconData icon, Color color, bool isDark) {
+  Widget _buildIndicatorCard(String title, IconData icon, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCardColor : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppTheme.darkBorderColor : AppTheme.borderColor,
-        ),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
-  Widget _buildProtectionStat(String label, String value, bool isDark) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-          ),
-        ),
-      ],
-    );
+  String _formatAmount(double amount) {
+    if (amount >= 100000) return '${(amount / 100000).toStringAsFixed(1)}L';
+    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(1)}K';
+    return amount.toStringAsFixed(0);
   }
 
   Map<String, dynamic> _calculatePeriodData(List<Map<String, dynamic>> transactions) {
     final now = DateTime.now();
-    int days;
-    
-    switch (_selectedPeriod) {
-      case 'Week':
-        days = 7;
-        break;
-      case 'Month':
-        days = 30;
-        break;
-      case 'Year':
-        days = 365;
-        break;
-      default:
-        days = 7;
-    }
-    
+    int days = _selectedPeriod == 'Week' ? 7 : (_selectedPeriod == 'Month' ? 30 : 365);
     final periodStart = now.subtract(Duration(days: days));
+    
     final periodTransactions = transactions.where((t) {
-      final timestamp = t['timestamp'] as DateTime?;
-      return timestamp != null && timestamp.isAfter(periodStart);
+      final ts = t['timestamp'] as DateTime?;
+      return ts != null && ts.isAfter(periodStart);
     }).toList();
     
-    final blockedCount = periodTransactions.where((t) => t['risk'] == 'high').length;
-    final protectedAmount = periodTransactions
-        .where((t) => t['risk'] == 'high')
-        .fold(0.0, (sum, t) => sum + (t['amount'] as double));
+    final blocked = periodTransactions.where((t) => ['high', 'very_high'].contains(t['risk']?.toString().toLowerCase())).toList();
+    final protectedAmount = blocked.fold(0.0, (sum, t) => sum + (t['amount'] as double));
     
+    int lowCount = 0, medCount = 0, highCount = 0;
+    for (var t in periodTransactions) {
+      final risk = t['risk']?.toString().toLowerCase() ?? '';
+      if (risk == 'low') lowCount++;
+      else if (['medium', 'moderate', 'amber'].contains(risk)) medCount++;
+      else if (['high', 'very_high'].contains(risk)) highCount++;
+    }
+
+    final total = periodTransactions.length;
     return {
-      'total': periodTransactions.length,
-      'blocked': blockedCount,
+      'total': total,
+      'blocked': blocked.length,
       'protected': protectedAmount,
+      'low_pct': total > 0 ? lowCount / total : 0.7,
+      'med_pct': total > 0 ? medCount / total : 0.25,
+      'high_pct': total > 0 ? highCount / total : 0.05,
     };
   }
-
-  String _getBlockedCount() {
-    final transactions = FraudStore.transactionHistory;
-    final data = _calculatePeriodData(transactions);
-    return data['blocked'].toString();
-  }
-
-  String _getProtectedAmount() {
-    final transactions = FraudStore.transactionHistory;
-    final data = _calculatePeriodData(transactions);
-    final amount = data['protected'] as double;
-    if (amount >= 100000) {
-      return '${(amount / 100000).toStringAsFixed(1)}L';
-    } else if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(1)}K';
-    }
-    return amount.toStringAsFixed(0);
-  }
-
-  String _getTotalTransactions() {
-    final transactions = FraudStore.transactionHistory;
-    final data = _calculatePeriodData(transactions);
-    return data['total'].toString();
-  }
 }
-

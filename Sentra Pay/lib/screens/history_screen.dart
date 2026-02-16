@@ -5,6 +5,7 @@ import '../widgets/risk_trend_graph.dart';
 import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_provider.dart';
+import '../models/fraud_store.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -62,6 +63,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
             wasBlocked: (data['status'] ?? '').toString().toUpperCase() == 'BLOCKED',
           );
         }).toList();
+
+        // Sync with FraudStore for Analytics screen
+        final List<Map<String, dynamic>> analyticsData = backendData.map((data) => {
+          'recipient': data['receiver'] ?? 'Unknown',
+          'amount': (data['amount'] ?? 0).toDouble(),
+          'risk': (data['risk_level'] ?? 'LOW').toString().toLowerCase(),
+          'timestamp': _parseTimestamp(data['timestamp']),
+        }).toList();
+        FraudStore.syncHistory(analyticsData);
 
         if (mounted) {
           setState(() {

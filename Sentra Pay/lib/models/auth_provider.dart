@@ -154,13 +154,14 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // Fallback to legacy API service (with timeout)
-      final profile = await ApiService.login(email, password).timeout(
+      final authData = await ApiService.login(email, password).timeout(
         const Duration(seconds: 2),
         onTimeout: () => null,
       );
       
-      if (profile != null) {
-        _currentUser = profile;
+      if (authData != null) {
+        _currentUser = UserProfile.fromJson(authData);
+        _token = authData['token'];
         _isAuthenticated = true;
         _isLoading = false;
         notifyListeners();
@@ -260,13 +261,14 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // Fallback to legacy API (with timeout)
-      final profile = await ApiService.signup(fullName, email, mobile, password).timeout(
+      final authData = await ApiService.signup(fullName, email, mobile, password).timeout(
         const Duration(seconds: 2),
         onTimeout: () => null,
       );
 
-      if (profile != null) {
-        _currentUser = profile;
+      if (authData != null) {
+        _currentUser = UserProfile.fromJson(authData);
+        _token = authData['token'];
         _isAuthenticated = true;
         _isLoading = false;
         notifyListeners();

@@ -90,6 +90,16 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Color _parseBackendColor(String? colorStr, Color fallback) {
+    if (colorStr == null) return fallback;
+    try {
+      final color = colorStr.replaceFirst('#', '0xFF');
+      return Color(int.parse(color));
+    } catch (e) {
+      return fallback;
+    }
+  }
+
   void _checkRecipient() async {
     if (_recipientController.text.isEmpty) return;
 
@@ -525,21 +535,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           const Divider(height: 1, indent: 16, endIndent: 16),
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            leading: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: (_receiverInfo?.verified ?? false) 
-                                    ? AppTheme.successColor.withOpacity(0.1) 
-                                    : Colors.orange.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                (_receiverInfo?.verified ?? false) ? Icons.verified_user_rounded : Icons.help_outline_rounded,
-                                color: (_receiverInfo?.verified ?? false) ? AppTheme.successColor : Colors.orange,
-                                size: 20,
-                              ),
-                            ),
                             title: Text(
                               _receiverInfo?.name ?? "Unknown",
                               style: TextStyle(
@@ -558,21 +553,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                       fontSize: 12,
                                     ),
                                   ),
-                                const SizedBox(height: 2),
+                                const SizedBox(height: 4),
                                 Row(
                                   children: [
                                     Icon(
-                                      (_receiverInfo?.verified ?? false) ? Icons.check_circle : Icons.warning_rounded,
-                                      size: 12,
-                                      color: (_receiverInfo?.verified ?? false) ? AppTheme.successColor : Colors.orange,
+                                      Icons.verified_user_rounded,
+                                      size: 14,
+                                      color: _parseBackendColor(_receiverInfo?.color, (_receiverInfo?.verified ?? false) ? AppTheme.successColor : Colors.orange),
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: 6),
                                     Text(
-                                      (_receiverInfo?.verified ?? false) ? "Verified Details" : "Not Verified",
+                                      _receiverInfo?.label ?? ((_receiverInfo?.verified ?? false) ? "Verified Details" : "Not Verified"),
                                       style: TextStyle(
-                                        color: (_receiverInfo?.verified ?? false) ? AppTheme.successColor : Colors.orange,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
+                                        color: _parseBackendColor(_receiverInfo?.color, (_receiverInfo?.verified ?? false) ? AppTheme.successColor : Colors.orange),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ],

@@ -12,7 +12,7 @@ class ApiService {
   // Use http://172.16.124.136:8000 for Physical Device (Same Wi-Fi)
   static const String baseUrl = "http://localhost:8000/api";
 
-  static Future<UserProfile?> signup(String name, String email, String phone, String password) async {
+  static Future<Map<String, dynamic>?> signup(String name, String email, String phone, String password) async {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/auth/signup"),
@@ -26,33 +26,30 @@ class ApiService {
       ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // data contains { ..., "token": "..." }
-        // We might need to store token later. For now, just return UserProfile.
-        return UserProfile.fromJson(data);
+        return jsonDecode(response.body);
       } else {
         final error = jsonDecode(response.body);
         print("Backend Signup Error: ${error['detail']}");
       }
     } catch (e) {
-      print("Signup Error: $e (Backend unavailable - using offline mode)");
+      print("Signup Error: $e");
     }
-    
-    // Backend unavailable or error - create local offline account
-    return _createOfflineUser(name, email, phone);
+    return null;
   }
   
-  static Future<UserProfile?> login(String email, String password) async {
+  static Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/auth/login"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"email": email, "password": password}),
-      );
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return UserProfile.fromJson(data);
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        print("Backend Login Error: ${error['detail']}");
       }
     } catch (e) {
       print("Login Error: $e");

@@ -81,6 +81,11 @@ class FraudStore {
     }
   }
 
+  static void syncHistory(List<Map<String, dynamic>> transactions) {
+    _transactionHistory.clear();
+    _transactionHistory.addAll(transactions);
+  }
+
   static void init() {
     // Generate ID on startup if not exists (mock)
     print("App User Security ID: $appUserId");

@@ -569,44 +569,12 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                 final authProvider = Provider.of<AuthProvider>(context, listen: false);
                                 final token = authProvider.token ?? "demo-token";
                                 
-                                // Show loading dialog
-                                showDialog(
-                                  context: context,
-                                  barrierDismissible: false,
-                                  builder: (context) => Center(
-                                    child: Container(
-                                      padding: const EdgeInsets.all(24),
-                                      decoration: BoxDecoration(
-                                        color: cardColor,
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const CircularProgressIndicator(),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            'Processing Payment...',
-                                            style: TextStyle(
-                                              color: textColor,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                                
                                 // Call payment confirmation API
                                 final result = await ApiService.confirmPayment(
                                   transactionId: widget.transactionId!,
                                   token: token,
                                   userAcknowledged: true,
                                 );
-                                
-                                // Close loading dialog
-                                if (mounted) Navigator.pop(context);
                                 
                                 if (result != null) {
                                   // Check if we're on mobile and have a UPI link

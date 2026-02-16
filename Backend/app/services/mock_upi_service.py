@@ -204,8 +204,15 @@ class MockUPIService:
         # 4. CLASSIFICATION LOGIC
         ui_props = {}
         
-        # PRIORITY 1: BLACKLISTED
-        if fraud_reports >= 3 or reputation < 0.2:
+        # 4. CLASSIFICATION LOGIC (BASED ON REALISTIC CRITERIA)
+        total_txns = user_data.get("total_transactions", 0 if not user_data else random.randint(10, 50))
+        fraud_ratio = user_data.get("fraud_ratio", (1.0 - reputation) * 100)
+        
+        ui_props = {}
+        
+        # PRIORITY 1: BLACKLISTED / HIGH RISK
+        # ANY of: fraud_ratio > 15%, 3+ reports, pattern matches (reputation < 0.2)
+        if fraud_ratio > 15 or fraud_reports >= 3 or reputation < 0.2:
             status = "BLACKLISTED"
             ui_props = {
                 "icon": "🔴",
@@ -214,14 +221,20 @@ class MockUPIService:
                 "label": "High Risk Account",
                 "can_proceed": False,
                 "action": "BLOCK",
-                "warning": "🚨 Flagged for suspicious activity.",
-                "recommendation": "Transaction blocked for safety."
+                "warning": "🚨 This account has multiple fraud reports.",
+                "recommendation": "Do not proceed with this payment."
             }
-            risk_level = "High"
-            risk_score = 90
+            risk_level = "Very High"
+            risk_score = 95
             
-        # PRIORITY 2: VERIFIED
-        elif is_merchant and reputation > 0.8:
+        # PRIORITY 2: VERIFIED MERCHANT
+        # ANY of: Registered (is_merchant & verified), 20+ txns & <2% fraud, 60+ days & 10+ txns & <3% fraud, Official category
+        elif is_verified_merchant := (is_merchant and (
+            (is_merchant and verified) or 
+            (total_txns >= 20 and fraud_ratio < 2) or 
+            (account_age >= 60 and total_txns >= 10 and fraud_ratio < 3) or
+            any(m in vpa_clean for m in ["swiggy", "amazon", "zomato", "flipkart", "paytm", "lic", "tneb"])
+        )):
             status = "VERIFIED"
             ui_props = {
                 "icon": "🟢",
@@ -230,27 +243,13 @@ class MockUPIService:
                 "label": "Verified Merchant",
                 "can_proceed": True,
                 "action": "ALLOW",
-                "message": "✅ Verified merchant with excellent track record."
+                "message": "✅ Secure merchant verified by Sentra Pay."
             }
             risk_level = "Low"
-            risk_score = 10
+            risk_score = 5
             
-        # PRIORITY 3: TRUSTED (Optional)
-        elif reputation > 0.7:
-            status = "TRUSTED"
-            ui_props = {
-                "icon": "🔵",
-                "color": "#2196F3",
-                "background": "#E3F2FD",
-                "label": "Trusted Account",
-                "can_proceed": True,
-                "action": "ALLOW",
-                "message": "Safe account with good history."
-            }
-            risk_level = "Low"
-            risk_score = 20
-            
-        # PRIORITY 4: UNKNOWN (Default)
+        # PRIORITY 3: UNVERIFIED / UNKNOWN (UNVERIFIED ACCOUNT)
+        # ALL of: (< 5 txns OR first time), ratio < 10%, not blacklisted
         else:
             status = "UNKNOWN"
             ui_props = {
@@ -260,11 +259,16 @@ class MockUPIService:
                 "label": "Unverified Account",
                 "can_proceed": True,
                 "action": "WARNING",
-                "warning": "⚠️ First time paying this receiver.",
-                "recommendation": "💡 Verify details carefully."
+                "warning": "⚠️ This is an unverified individual account.",
+                "recommendation": "Confirm the receiver's identity before paying."
             }
             risk_level = "Medium"
-            risk_score = 45
+            risk_score = 40
+            
+            # Special case for "Harianth (Unverified)" from the image
+            if "harianth" in vpa_clean:
+                ui_props["label"] = "Unverified Account"
+                name = "Harianth (Unverified)"
 
         # 5. Build Professional Response
         return {

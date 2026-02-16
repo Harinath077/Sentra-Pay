@@ -33,7 +33,7 @@ class AppTheme {
         background: backgroundColor,
         onSurface: textPrimary,
       ),
-      textTheme: GoogleFonts.outfitTextTheme().copyWith(
+      textTheme: GoogleFonts.interTextTheme().copyWith(
         displayLarge: const TextStyle(
           color: textPrimary,
           fontWeight: FontWeight.bold,
@@ -144,7 +144,7 @@ class AppTheme {
         background: darkBackgroundColor,
         onSurface: darkTextPrimary,
       ),
-      textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).copyWith(
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
         displayLarge: const TextStyle(
           color: darkTextPrimary,
           fontWeight: FontWeight.bold,

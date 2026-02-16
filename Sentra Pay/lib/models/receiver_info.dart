@@ -11,6 +11,11 @@ class ReceiverInfo {
   final List<String> riskFactors;
   final String? microTip;
 
+  final String? icon;
+  final String? color;
+  final String? background;
+  final String? label;
+
   ReceiverInfo({
     required this.upiId,
     required this.name,
@@ -21,6 +26,10 @@ class ReceiverInfo {
     this.riskLevel = "Low",
     this.riskFactors = const [],
     this.microTip,
+    this.icon,
+    this.color,
+    this.background,
+    this.label,
   });
 
   factory ReceiverInfo.fromJson(Map<String, dynamic> json) {
@@ -34,6 +43,10 @@ class ReceiverInfo {
       riskLevel: json['risk_level'] ?? "Low",
       riskFactors: List<String>.from(json['risk_factors'] ?? []),
       microTip: json['micro_tip'],
+      icon: json['icon'],
+      color: json['color'],
+      background: json['background'],
+      label: json['label'],
     );
   }
 }

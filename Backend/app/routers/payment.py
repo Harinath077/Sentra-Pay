@@ -444,8 +444,7 @@ async def get_history(
     from sqlalchemy import desc
     
     transactions = db.query(Transaction).filter(
-        Transaction.user_id == current_user.id,
-        Transaction.status.in_(["COMPLETED", "success"])
+        Transaction.user_id == current_user.id
     ).order_by(desc(Transaction.created_at)).limit(limit).all()
     
     return [
