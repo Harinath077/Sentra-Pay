@@ -79,14 +79,15 @@ def get_user_context(user_id: str, receiver: Optional[str] = None, db: Optional[
         txn_stats = calculate_user_stats(user_id, db)
         
         # Get receiver reputation if provided
-        receiver_info = None
+        receiver_info = {}
         if receiver:
             receiver_info = get_receiver_reputation(receiver, db)
             
-            # Check if this specific user has paid this receiver before
-            # This overrides the global "is_new" flag from receiver reputation
-            is_new_for_user = check_new_receiver(user_id, receiver, db)
-            receiver_info["is_new"] = is_new_for_user
+            # ─────────────────────────────────────────────────────────────
+            # NEW: Analyze detailed receiver history (The Brain update)
+            # ─────────────────────────────────────────────────────────────
+            history_analysis = analyze_receiver_history(user_id, receiver, db)
+            receiver_info.update(history_analysis)
         
         return UserContext(
             user_profile=user_profile,
@@ -104,10 +105,11 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     Calculate user transaction statistics for risk analysis.
     
     Computes:
-    - Average amount (30 days)
-    - Max amount (30 days)
-    - Transaction count (30 days, 1 hour, 5 minutes)
+    - Average amount (30 days, 7 days)
+    - Max amount (30 days, 7 days)
+    - Transaction count (30 days, 24 hours, 1 hour, 5 minutes)
     - Days since last transaction
+    - Night transaction ratio
     - Failed transaction count (7 days)
     - User tenure in days
     
@@ -123,10 +125,14 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     if not user_orm:
         return {
             "avg_amount_30d": 0.0,
+            "avg_amount_7d": 0.0,
             "max_amount_30d": 0.0,
+            "max_amount_7d": 0.0,
             "txn_count_30d": 0,
+            "txn_count_24h": 0,
             "txn_count_1hour": 0,
             "txn_count_5min": 0,
+            "night_txn_ratio": 0.0,
             "failed_txn_count_7d": 0,
             "days_since_last_txn": 999,
             "user_tenure_days": 0
@@ -138,6 +144,7 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     now = datetime.now(timezone.utc)
     thirty_days_ago = now - timedelta(days=30)
     seven_days_ago = now - timedelta(days=7)
+    one_day_ago = now - timedelta(days=1)
     one_hour_ago = now - timedelta(hours=1)
     five_min_ago = now - timedelta(minutes=5)
     
@@ -145,18 +152,39 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     txns_30d = db.query(Transaction).filter(
         Transaction.user_id == internal_user_id,
         Transaction.created_at >= thirty_days_ago,
-        Transaction.status == "success"
+        Transaction.status == "COMPLETED"
     ).all()
     
     avg_amount_30d = 0.0
     max_amount_30d = 0.0
     txn_count_30d = len(txns_30d)
+    night_txns = 0
     
     if txns_30d:
         amounts = [float(txn.amount) for txn in txns_30d]
         avg_amount_30d = sum(amounts) / len(amounts)
         max_amount_30d = max(amounts)
+        
+        # Calculate night txn ratio (23:00 to 05:00)
+        night_txns = len([t for t in txns_30d if t.created_at.hour >= 23 or t.created_at.hour <= 5])
     
+    night_txn_ratio = night_txns / max(txn_count_30d, 1)
+
+    # 7-day statistics
+    txns_7d = [t for t in txns_30d if t.created_at >= seven_days_ago]
+    avg_amount_7d = 0.0
+    max_amount_7d = 0.0
+    if txns_7d:
+        amounts_7d = [float(txn.amount) for txn in txns_7d]
+        avg_amount_7d = sum(amounts_7d) / len(amounts_7d)
+        max_amount_7d = max(amounts_7d)
+
+    # 24-hour count
+    txn_count_24h = db.query(Transaction).filter(
+        Transaction.user_id == internal_user_id,
+        Transaction.created_at >= one_day_ago
+    ).count()
+
     # Velocity calculations
     txn_count_1hour = db.query(Transaction).filter(
         Transaction.user_id == internal_user_id,
@@ -172,7 +200,7 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     failed_txn_count_7d = db.query(Transaction).filter(
         Transaction.user_id == internal_user_id,
         Transaction.created_at >= seven_days_ago,
-        Transaction.status == "failed"
+        Transaction.status == "FAILED"
     ).count()
     
     # Days since last transaction
@@ -191,10 +219,14 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     
     return {
         "avg_amount_30d": avg_amount_30d,
+        "avg_amount_7d": avg_amount_7d,
         "max_amount_30d": max_amount_30d,
+        "max_amount_7d": max_amount_7d,
         "txn_count_30d": txn_count_30d,
+        "txn_count_24h": txn_count_24h,
         "txn_count_1hour": txn_count_1hour,
         "txn_count_5min": txn_count_5min,
+        "night_txn_ratio": night_txn_ratio,
         "failed_txn_count_7d": failed_txn_count_7d,
         "days_since_last_txn": days_since_last_txn,
         "user_tenure_days": user_tenure_days
@@ -259,32 +291,111 @@ def check_new_receiver(user_id: str, receiver: str, db: Session) -> bool:
     """
     Check if receiver is new for this user.
     Uses dedicated ReceiverHistory table for efficiency.
-    
-    Args:
-        user_id: User identifier (public ID string)
-        receiver: Receiver UPI/identifier
-        db: Database session
-    
-    Returns:
-        True if receiver is new (never successfully paid), False otherwise
     """
-    # Fix: User ID lookup (Resolve string user_id to int pk)
-    # The models use int PK for foreign keys but string for public ID
     user_orm = db.query(User).filter(User.user_id == user_id).first()
     if not user_orm:
-        return True  # Safe default
+        return True
         
-    # Check dedicated history table
+    # Standardize receiver ID
+    receiver_upi = receiver.lower().strip()
+    
     from app.database.models import ReceiverHistory
     
     history_record = db.query(ReceiverHistory).filter(
         ReceiverHistory.user_id == user_orm.id,
-        ReceiverHistory.receiver_upi == receiver
+        ReceiverHistory.receiver_upi == receiver_upi
     ).first()
     
-    # If record exists, they have paid before
     return history_record is None
 
+
+def analyze_receiver_history(user_id: str, receiver_upi: str, db: Session) -> Dict:
+    """
+    Advanced receiver history analysis based on transaction records.
+    
+    Logic:
+    - Normalizes UPI ID
+    - Checks for successful (COMPLETED) transactions
+    - Flags suspicious behavior (FAILED/BLOCKED/HIGH_RISK)
+    """
+    # 1. Normalize UPI ID
+    receiver_upi = receiver_upi.lower().strip()
+    
+    # 2. Get User internal ID
+    user_orm = db.query(User).filter(User.user_id == user_id).first()
+    if not user_orm:
+        return {
+            "is_new": True,
+            "good_history": False,
+            "risky_history": False,
+            "transaction_count": 0,
+            "avg_risk_score": 0.0,
+            "receiver_trust_score": 0.0
+        }
+    
+    # 4. Phase 1: Check established history record (Primary Source of Truth)
+    from app.database.models import ReceiverHistory
+    history_record = db.query(ReceiverHistory).filter(
+        ReceiverHistory.user_id == user_orm.id,
+        ReceiverHistory.receiver_upi == receiver_upi
+    ).first()
+    
+    # 5. Phase 2: Query Transactions for Detailed Risk Profiling
+    # We only care about COMPLETED transactions for the "Count"
+    # and all transactions for the "Risk" profile
+    all_txns = db.query(Transaction).filter(
+        Transaction.user_id == user_orm.id,
+        Transaction.receiver == receiver_upi
+    ).all()
+    
+    completed_txns = [t for t in all_txns if t.status == "COMPLETED"]
+    txn_count = len(completed_txns)
+    
+    # Fallback to history record count if transaction list is lagging
+    if history_record and history_record.payment_count > txn_count:
+        txn_count = history_record.payment_count
+
+    failed_count = len([t for t in all_txns if t.status == "FAILED"])
+    blocked_count = len([t for t in all_txns if t.status == "BLOCKED"])
+    high_risk_flags = len([t for t in all_txns if t.risk_level in ["HIGH", "VERY_HIGH"]])
+    
+    # Calculate average risk of COMPLETED transactions
+    if txn_count > 0:
+        avg_risk = sum([float(t.risk_score or 0.0) for t in completed_txns]) / len(completed_txns) if completed_txns else 0.0
+    else:
+        avg_risk = 0.0
+    
+    # 6. Define History Profiles (STRICT FINTECH LOGIC)
+    
+    # A receiver is "NEW" if no COMPLETED transactions exist in history table OR transaction table
+    is_new = (txn_count == 0) and (history_record is None)
+    
+    # Case 2: Good History
+    is_good = (
+        txn_count >= 2 and 
+        blocked_count == 0 and 
+        high_risk_flags == 0 and 
+        avg_risk < 0.50
+    )
+    
+    # Case 3: Risky History
+    is_risky = (
+        failed_count >= 2 or 
+        blocked_count > 0 or 
+        high_risk_flags > 0 or 
+        avg_risk > 0.70
+    )
+    
+    logger.info(f"Receiver Analysis for {receiver_upi}: New={is_new}, Count={txn_count}, Risky={is_risky}")
+    
+    return {
+        "is_new": is_new,
+        "good_history": is_good,
+        "risky_history": is_risky,
+        "transaction_count": txn_count,
+        "avg_risk_score": round(avg_risk, 2)
+    }
+    
 
 def get_transaction_history(user_id: str, days: int = 30, db: Optional[Session] = None) -> List[Dict]:
     """

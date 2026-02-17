@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'user_profile.dart';
 import '../services/api_service.dart';
 import '../services/firebase_auth_service.dart';
@@ -15,6 +16,10 @@ class AuthProvider extends ChangeNotifier {
   // Firebase service
   final FirebaseAuthService _firebaseAuth = FirebaseAuthService();
 
+  // Google Sign-In & Secure Storage
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+  final _storage = const FlutterSecureStorage();
+
   UserProfile? get currentUser => _currentUser;
   String? get token => _token;
   bool get isAuthenticated => _isAuthenticated;
@@ -22,6 +27,62 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isLoading => _isLoading;
   String? get userId => _firebaseAuth.currentUserId;
+
+  /// Sign In with Google
+  Future<bool> signInWithGoogle() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // 1. Sign in with Google
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        _isLoading = false;
+        notifyListeners();
+        return false; // User cancelled
+      }
+
+      // 2. Get authentication details
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        _errorMessage = "Could not retrieve Google ID Token";
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // 3. Send idToken to our Backend
+      final authData = await ApiService.googleLogin(idToken);
+
+      if (authData != null) {
+        // 4. Store JWT securely
+        _token = authData['token'];
+        await _storage.write(key: 'jwt_token', value: _token);
+
+        // 5. Update user profile
+        _currentUser = UserProfile.fromJson(authData);
+        _isAuthenticated = true;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = "Backend authentication failed";
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      print('Google Sign-In Error: $e');
+      _errorMessage = "Google login failed: $e";
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 
   void toggleBiometric(bool value) {
     _isBiometricEnabled = value;
@@ -31,7 +92,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> authenticateBiometric() async {
     // Simulate biometric delay
     await Future.delayed(const Duration(milliseconds: 1500));
-    
+
     // Auto-login with demo account (now using Firebase in background)
     if (_users.containsKey('gopal@gmail.com')) {
       final demoUser = _users['gopal@gmail.com']!;
@@ -74,26 +135,26 @@ class AuthProvider extends ChangeNotifier {
     try {
       print('AuthProvider: Starting signin for $email');
       // Try Firebase authentication first (with timeout)
-      final result = await _firebaseAuth.signIn(
-        email: email,
-        password: password,
-      ).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          print('AuthProvider: Firebase signin timed out');
-          return {'success': false, 'error': 'timeout'};
-        },
+      final result = await _firebaseAuth
+          .signIn(email: email, password: password)
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              print('AuthProvider: Firebase signin timed out');
+              return {'success': false, 'error': 'timeout'};
+            },
+          );
+
+      print(
+        'AuthProvider: Firebase result - success: ${result['success']}, error: ${result['error']}',
       );
 
-      print('AuthProvider: Firebase result - success: ${result['success']}, error: ${result['error']}');
-      
       if (result['success']) {
         // Get user profile from Firestore
-        var profile = await _firebaseAuth.getUserProfile(result['userId']).timeout(
-          const Duration(seconds: 3),
-          onTimeout: () => null,
-        );
-        
+        var profile = await _firebaseAuth
+            .getUserProfile(result['userId'])
+            .timeout(const Duration(seconds: 3), onTimeout: () => null);
+
         if (profile != null) {
           // Convert Firestore Timestamp to DateTime
           DateTime createdAt;
@@ -110,7 +171,10 @@ class AuthProvider extends ChangeNotifier {
 
           _currentUser = UserProfile(
             userId: profile['userId'] ?? result['userId'],
-            securityId: (profile['userId'] ?? result['userId']).substring(0, 12),
+            securityId: (profile['userId'] ?? result['userId']).substring(
+              0,
+              12,
+            ),
             fullName: profile['name'] ?? 'User',
             email: profile['email'] ?? email,
             mobile: profile['phone'],
@@ -122,7 +186,7 @@ class AuthProvider extends ChangeNotifier {
             loginCount: profile['loginCount'] ?? 1,
             commonVPAs: List<String>.from(profile['commonVPAs'] ?? []),
           );
-          
+
           _isAuthenticated = true;
           _isLoading = false;
           notifyListeners();
@@ -145,7 +209,7 @@ class AuthProvider extends ChangeNotifier {
             loginCount: 1,
             commonVPAs: [],
           );
-          
+
           _isAuthenticated = true;
           _isLoading = false;
           notifyListeners();
@@ -154,11 +218,11 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // Fallback to legacy API service (with timeout)
-      final authData = await ApiService.login(email, password).timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => null,
-      );
-      
+      final authData = await ApiService.login(
+        email,
+        password,
+      ).timeout(const Duration(seconds: 2), onTimeout: () => null);
+
       if (authData != null) {
         _currentUser = UserProfile.fromJson(authData);
         _token = authData['token'];
@@ -186,7 +250,6 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
-
     } catch (e) {
       print('Login error: $e');
       // If all else fails, try demo account
@@ -201,7 +264,7 @@ class AuthProvider extends ChangeNotifier {
           return true;
         }
       }
-      
+
       _errorMessage = 'Invalid credentials. Please try again.';
       _isLoading = false;
       notifyListeners();
@@ -223,20 +286,22 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       // Create account with Firebase (with timeout)
-      var result = await _firebaseAuth.signUp(
-        email: email,
-        password: password,
-        name: fullName,
-        phone: mobile,
-      ).timeout(
-        const Duration(seconds: 3),
-        onTimeout: () => {'success': false, 'error': 'timeout'},
-      );
+      var result = await _firebaseAuth
+          .signUp(
+            email: email,
+            password: password,
+            name: fullName,
+            phone: mobile,
+          )
+          .timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => {'success': false, 'error': 'timeout'},
+          );
 
       if (result['success']) {
         // Get the created profile
         var profile = await _firebaseAuth.getUserProfile(result['userId']);
-        
+
         if (profile != null) {
           _currentUser = UserProfile(
             userId: profile['userId'],
@@ -245,14 +310,16 @@ class AuthProvider extends ChangeNotifier {
             email: profile['email'] ?? email,
             mobile: profile['phone'] ?? mobile,
             profilePhotoUrl: profilePhotoUrl,
-            createdAt: profile['createdAt']?.toDate().toIso8601String() ?? DateTime.now().toIso8601String(),
+            createdAt:
+                profile['createdAt']?.toDate().toIso8601String() ??
+                DateTime.now().toIso8601String(),
             transactionCount: 0,
             trustScore: 100.0,
             deviceId: profile['deviceId'] ?? '',
             loginCount: 1,
             commonVPAs: [],
           );
-          
+
           _isAuthenticated = true;
           _isLoading = false;
           notifyListeners();
@@ -261,10 +328,12 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // Fallback to legacy API (with timeout)
-      final authData = await ApiService.signup(fullName, email, mobile, password).timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => null,
-      );
+      final authData = await ApiService.signup(
+        fullName,
+        email,
+        mobile,
+        password,
+      ).timeout(const Duration(seconds: 2), onTimeout: () => null);
 
       if (authData != null) {
         _currentUser = UserProfile.fromJson(authData);
@@ -292,13 +361,12 @@ class AuthProvider extends ChangeNotifier {
         loginCount: 1,
         commonVPAs: [],
       );
-      
+
       _token = "demo-token";
       _isAuthenticated = true;
       _isLoading = false;
       notifyListeners();
       return true;
-
     } catch (e) {
       // If all else fails, create demo account
       final newUserId = 'UID-${DateTime.now().millisecondsSinceEpoch}';
@@ -316,7 +384,7 @@ class AuthProvider extends ChangeNotifier {
         loginCount: 1,
         commonVPAs: [],
       );
-      
+
       _isAuthenticated = true;
       _isLoading = false;
       notifyListeners();
@@ -358,7 +426,7 @@ class AuthProvider extends ChangeNotifier {
 
   void updateTransactionStats(int count, double trustScore) {
     if (_currentUser == null) return;
-    
+
     _currentUser = _currentUser!.copyWith(
       transactionCount: count,
       trustScore: trustScore,
@@ -370,11 +438,15 @@ class AuthProvider extends ChangeNotifier {
   Future<void> refreshProfile() async {
     if (_firebaseAuth.currentUserId == null) return;
 
-    var profile = await _firebaseAuth.getUserProfile(_firebaseAuth.currentUserId!);
+    var profile = await _firebaseAuth.getUserProfile(
+      _firebaseAuth.currentUserId!,
+    );
     if (profile != null) {
       _currentUser = _currentUser?.copyWith(
-        transactionCount: profile['totalTransactions'] ?? _currentUser?.transactionCount,
-        trustScore: (profile['trustScore'] ?? _currentUser?.trustScore).toDouble(),
+        transactionCount:
+            profile['totalTransactions'] ?? _currentUser?.transactionCount,
+        trustScore: (profile['trustScore'] ?? _currentUser?.trustScore)
+            .toDouble(),
       );
       notifyListeners();
     }

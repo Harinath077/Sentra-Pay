@@ -17,6 +17,7 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   List<Transaction> _history = [];
   bool _isLoading = true;
+  String? _errorMessage;
   String _trustTier = "Bronze";
   double _trustScore = 50.0;
 
@@ -40,14 +41,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _fetchHistory() async {
-    // 1. Fetch from backend
-    // Since we don't have a real token stored in this demo flow yet,
-    // we'll try to use a dummy one or skip if not implemented.
-    // For now, let's mix local + backend.
-    
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.token ?? "demo-token";
+      
+      print("Fetching history from: ${ApiService.baseUrl}");
       final backendData = await ApiService.getTransactionHistory(token);
       
       if (backendData.isNotEmpty) {
@@ -58,13 +63,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
             amount: (data['amount'] ?? 0).toDouble(),
             riskScore: (data['risk_score'] ?? 0).toDouble(),
             riskCategory: data['risk_level'] ?? 'LOW',
-            // Handle UTC timestamp from backend
             timestamp: _parseTimestamp(data['timestamp']),
             wasBlocked: (data['status'] ?? '').toString().toUpperCase() == 'BLOCKED',
           );
         }).toList();
 
-        // Sync with FraudStore for Analytics screen
+        // Sync with fraud store
         final List<Map<String, dynamic>> analyticsData = backendData.map((data) => {
           'recipient': data['receiver'] ?? 'Unknown',
           'amount': (data['amount'] ?? 0).toDouble(),
@@ -78,10 +82,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             _history = backendTransactions;
             _isLoading = false;
             
-            // Calculate trust score based on history for now
-            // In a real app, we'd fetch the user profile for accurate trust score
             if (_history.isNotEmpty) {
-               // Simple calculation for UI feedback
                int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
                _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
             }
@@ -90,28 +91,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
           });
         }
       } else {
-        // Backend returned empty, maybe new user or failure.
-        // If empty list, check if we should show dummy data or just empty state.
-        // For demo purposes, if empty, we fall back to dummy data so the UI isn't empty.
-        _loadLocalHistory();
+        // Backend returned empty
+        if (mounted) {
+          setState(() {
+            _history = [];
+            _isLoading = false;
+            _trustScore = 50.0;
+            _trustTier = "Bronze";
+          });
+        }
       }
     } catch (e) {
       print("Error fetching history: $e");
-      _loadLocalHistory();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _history = [];
+          
+          if (e.toString().contains("Connection refused") || e.toString().contains("Network is unreachable")) {
+             _errorMessage = "Could not connect to server.\nCheck your internet or backend.";
+          } else {
+             _errorMessage = "Failed to load history.\nWait a moment and try again.";
+          }
+        });
+      }
     }
   }
 
-  void _loadLocalHistory() {
-     if (mounted) {
-      setState(() {
-        _history = TransactionHistory.getRecentTransactions(20);
-        _isLoading = false;
-        _trustScore = TransactionHistory.getTrustScore(); 
-        _trustTier = TransactionHistory.getTrustTier();
-      });
-     }
-  }
-  
   Color _getRiskColor(double score) {
     if (score < 0.35) return const Color(0xFF10B981);
     if (score < 0.65) return const Color(0xFFF59E0B);
@@ -162,7 +168,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final textColor = isDark ? AppTheme.darkTextPrimary : const Color(0xFF0F172A);
     final secondaryColor = isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B);
 
-    final riskTrend = TransactionHistory.getRiskTrend(10); // Still using local calc for graph
+    // Use real data for risk trend
+    final riskTrend = _history.map((t) => t.riskScore).toList();
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -191,7 +198,41 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
       body: _isLoading 
         ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
-        : SingleChildScrollView(
+        : _errorMessage != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.cloud_off_rounded, size: 64, color: secondaryColor),
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _fetchHistory,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text("Retry Connection"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         child: Column(

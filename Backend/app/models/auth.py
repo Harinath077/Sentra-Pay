@@ -52,6 +52,18 @@ class LoginRequest(BaseModel):
         }
 
 
+class GoogleLoginRequest(BaseModel):
+    """Request model for Google authentication."""
+    id_token: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjRiZWU..."
+            }
+        }
+
+
 class TokenResponse(BaseModel):
     """Response model for authentication tokens."""
     

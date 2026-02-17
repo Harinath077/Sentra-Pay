@@ -61,7 +61,7 @@ async def validate_receiver(vpa: str):
     **Response:**
 ```json
     {
-      "status": "success",
+      "status": "SUCCESS",
       "vpa": "sachin@paytm",
       "name": "Sachin Ramesh Tendulkar",
       "bank": "Paytm Payments Bank",
@@ -142,7 +142,7 @@ async def report_receiver(report: ReportRequest, db: Session = Depends(get_db)):
     redis_client.delete(redis_key)
     
     return {
-        "status": "success",
+        "status": "SUCCESS",
         "message": f"Receiver reported. Analytics updated.",
         "fraud_count": receiver.fraud_count
     }

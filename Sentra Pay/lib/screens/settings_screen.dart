@@ -20,10 +20,7 @@ class SettingsScreen extends StatelessWidget {
         centerTitle: true,
         title: const Text(
           "Settings",
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
       ),
       body: SingleChildScrollView(
@@ -33,14 +30,15 @@ class SettingsScreen extends StatelessWidget {
           children: [
             // Header Section
 
-
             // Features Section
             Text(
               "FEATURES",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B),
+                color: isDark
+                    ? AppTheme.darkTextSecondary
+                    : const Color(0xFF64748B),
                 letterSpacing: 1.2,
               ),
             ),
@@ -69,7 +67,8 @@ class SettingsScreen extends StatelessWidget {
                       title: "Advanced Analytics",
                       description: "Detailed risk insights and patterns",
                       isUnlocked: settings.advancedAnalyticsUnlocked,
-                      onToggle: (value) => settings.toggleAdvancedAnalytics(value),
+                      onToggle: (value) =>
+                          settings.toggleAdvancedAnalytics(value),
                       isDark: isDark,
                       cardColor: cardColor,
                       isPremium: true,
@@ -99,7 +98,9 @@ class SettingsScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B),
+                color: isDark
+                    ? AppTheme.darkTextSecondary
+                    : const Color(0xFF64748B),
                 letterSpacing: 1.2,
               ),
             ),
@@ -164,14 +165,18 @@ class SettingsScreen extends StatelessWidget {
                 color: cardColor,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isDark ? AppTheme.darkBorderColor : AppTheme.borderColor,
+                  color: isDark
+                      ? AppTheme.darkBorderColor
+                      : AppTheme.borderColor,
                 ),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.info_outline_rounded,
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                    color: isDark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.textSecondary,
                     size: 20,
                   ),
                   const SizedBox(width: 12),
@@ -180,7 +185,9 @@ class SettingsScreen extends StatelessWidget {
                       "Features can be toggled on/off anytime. Premium features enhance your security experience.",
                       style: TextStyle(
                         fontSize: 13,
-                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                        color: isDark
+                            ? AppTheme.darkTextSecondary
+                            : AppTheme.textSecondary,
                         height: 1.5,
                       ),
                     ),
@@ -238,14 +245,18 @@ class SettingsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isUnlocked
                         ? const Color(0xFF10B981).withOpacity(0.1)
-                        : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100),
+                        : (isDark
+                              ? Colors.white.withOpacity(0.05)
+                              : Colors.grey.shade100),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     icon,
                     color: isUnlocked
                         ? const Color(0xFF10B981)
-                        : (isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                        : (isDark
+                              ? AppTheme.darkTextSecondary
+                              : AppTheme.textSecondary),
                     size: 24,
                   ),
                 ),
@@ -262,17 +273,25 @@ class SettingsScreen extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                                color: isDark
+                                    ? AppTheme.darkTextPrimary
+                                    : AppTheme.textPrimary,
                               ),
                             ),
                           ),
                           if (isPremium) ...[
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
+                                  colors: [
+                                    Color(0xFFF59E0B),
+                                    Color(0xFFEF4444),
+                                  ],
                                 ),
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -294,7 +313,9 @@ class SettingsScreen extends StatelessWidget {
                         description,
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                          color: isDark
+                              ? AppTheme.darkTextSecondary
+                              : AppTheme.textSecondary,
                         ),
                       ),
                     ],
@@ -304,7 +325,7 @@ class SettingsScreen extends StatelessWidget {
                 Switch(
                   value: isUnlocked,
                   onChanged: onToggle,
-                  activeColor: const Color(0xFF10B981),
+                  activeThumbColor: const Color(0xFF10B981),
                 ),
               ],
             ),
@@ -347,11 +368,7 @@ class SettingsScreen extends StatelessWidget {
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    icon,
-                    color: color,
-                    size: 24,
-                  ),
+                  child: Icon(icon, color: color, size: 24),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -363,7 +380,9 @@ class SettingsScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -371,7 +390,9 @@ class SettingsScreen extends StatelessWidget {
                         subtitle,
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                          color: isDark
+                              ? AppTheme.darkTextSecondary
+                              : AppTheme.textSecondary,
                         ),
                       ),
                     ],
@@ -380,7 +401,9 @@ class SettingsScreen extends StatelessWidget {
                 Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 16,
-                  color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                  color: isDark
+                      ? AppTheme.darkTextSecondary
+                      : AppTheme.textSecondary,
                 ),
               ],
             ),

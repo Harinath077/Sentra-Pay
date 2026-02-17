@@ -30,25 +30,25 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _recipientController = TextEditingController();
-  
+
   // State for Recipient Verification
   bool _isChecking = false;
   bool _isVerified = false;
   ReceiverInfo? _receiverInfo;
-  
+
   // State for Payment Processing
-  bool _isProcessing = false;
-  
+  final bool _isProcessing = false;
+
   // State for Micro-Tips
   bool _showMicroTip = true;
   String _currentTip = '';
-  
+
   @override
   void initState() {
     super.initState();
     // Get a random tip from MicroTips service
     _currentTip = MicroTips.getRandomTip();
-    
+
     // Polite Location Request (Non-blocking)
     _requestLocationPermission();
 
@@ -68,15 +68,20 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      
-      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-        // Just cache/ensure access. 
+
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        // Just cache/ensure access.
         // We don't block the UI waiting for the exact fix here.
-        Geolocator.getCurrentPosition().then((pos) {
-             print("Location Access Granted: ${pos.latitude}, ${pos.longitude}");
-        }).catchError((e) {
-             print("Location error: $e");
-        });
+        Geolocator.getCurrentPosition()
+            .then((pos) {
+              print(
+                "Location Access Granted: ${pos.latitude}, ${pos.longitude}",
+              );
+            })
+            .catchError((e) {
+              print("Location error: $e");
+            });
       }
     } catch (e) {
       print("Location permission check failed: $e");
@@ -110,7 +115,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     // Call Backend Validation API
-    final receiverInfo = await ApiService.validateReceiver(_recipientController.text);
+    final receiverInfo = await ApiService.validateReceiver(
+      _recipientController.text,
+    );
 
     if (mounted) {
       if (receiverInfo != null && receiverInfo.name != "Unknown Receiver") {
@@ -120,10 +127,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _receiverInfo = receiverInfo;
         });
       } else {
-          // Unknown or invalid
-          setState(() {
+        // Unknown or invalid
+        setState(() {
           _isChecking = false;
-          _isVerified = true; // Allow proceeding as unknown (but trigger warning in risk analysis later)
+          _isVerified =
+              true; // Allow proceeding as unknown (but trigger warning in risk analysis later)
           _receiverInfo = ReceiverInfo(
             upiId: _recipientController.text,
             name: "Unknown Receiver",
@@ -136,8 +144,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _handlePayment() async {
     if (_amountController.text.isEmpty || !_isVerified) {
-       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter amount and verify recipient')),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter amount and verify recipient'),
+        ),
       );
       return;
     }
@@ -154,13 +164,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final recipientId = _recipientController.text;
 
     // Fire API call in parallel
-    var apiFuture = FraudStore.analyzeRiskAsync(
-      recipientId,
-      amount,
-      user: authProvider.currentUser,
-      token: authProvider.token,
-    ).then((result) => riskResult = result)
-     .catchError((e) => error = e.toString());
+    var apiFuture =
+        FraudStore.analyzeRiskAsync(
+              recipientId,
+              amount,
+              user: authProvider.currentUser,
+              token: authProvider.token,
+            )
+            .then((result) => riskResult = result)
+            .catchError((e) => error = e.toString());
 
     // Show Security Loader (Minimum 2.5s duration)
     await showDialog(
@@ -183,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (error != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Error analyzing transaction: $error')),
+          SnackBar(content: Text('Error analyzing transaction: $error')),
         );
       }
       return;
@@ -209,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
     final cardColor = Theme.of(context).colorScheme.surface;
-    
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
@@ -235,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               "Sentra Pay",
               style: TextStyle(
-                fontFamily: 'Outfit', 
+                fontFamily: 'Outfit',
                 fontWeight: FontWeight.w800,
                 fontSize: 22,
                 letterSpacing: -0.5,
@@ -246,7 +258,11 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.shield_moon_rounded, size: 12, color: AppTheme.successColor),
+                Icon(
+                  Icons.shield_moon_rounded,
+                  size: 12,
+                  color: AppTheme.successColor,
+                ),
                 SizedBox(width: 4),
                 Text(
                   "Secure UPI Payment",
@@ -295,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 20),
-                  
+
                   // Micro-Tip Widget
                   if (_showMicroTip)
                     AnimatedOpacity(
@@ -303,14 +319,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       duration: const Duration(milliseconds: 300),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark 
+                          color: isDark
                               ? const Color(0xFF1E40AF).withOpacity(0.1)
                               : const Color(0xFFDCFCE7),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isDark 
+                            color: isDark
                                 ? const Color(0xFF60A5FA).withOpacity(0.2)
                                 : const Color(0xFF10B981).withOpacity(0.3),
                           ),
@@ -320,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Icon(
                               Icons.lightbulb_outline_rounded,
                               size: 18,
-                              color: isDark 
+                              color: isDark
                                   ? const Color(0xFF60A5FA)
                                   : const Color(0xFF059669),
                             ),
@@ -330,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _currentTip,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: isDark 
+                                  color: isDark
                                       ? AppTheme.darkTextPrimary
                                       : const Color(0xFF065F46),
                                   fontWeight: FontWeight.w500,
@@ -344,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               icon: Icon(
                                 Icons.close,
                                 size: 16,
-                                color: isDark 
+                                color: isDark
                                     ? AppTheme.darkTextSecondary
                                     : const Color(0xFF059669).withOpacity(0.6),
                               ),
@@ -358,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                  
+
                   // Professional Transaction Card
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 0),
@@ -395,7 +414,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
-                                  color: isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B),
+                                  color: isDark
+                                      ? AppTheme.darkTextSecondary
+                                      : const Color(0xFF64748B),
                                   letterSpacing: 1.2,
                                 ),
                               ),
@@ -408,7 +429,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: isDark ? AppTheme.darkTextSecondary : const Color(0xFF94A3B8),
+                            color: isDark
+                                ? AppTheme.darkTextSecondary
+                                : const Color(0xFF94A3B8),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -421,7 +444,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.w400,
-                                color: isDark ? AppTheme.darkTextPrimary : const Color(0xFF1E1B4B),
+                                color: isDark
+                                    ? AppTheme.darkTextPrimary
+                                    : const Color(0xFF1E1B4B),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -434,7 +459,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: TextStyle(
                                     fontSize: 52,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? AppTheme.darkTextPrimary : const Color(0xFF1E1B4B),
+                                    color: isDark
+                                        ? AppTheme.darkTextPrimary
+                                        : const Color(0xFF1E1B4B),
                                     letterSpacing: -1.0,
                                     height: 1.0,
                                   ),
@@ -444,8 +471,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                     focusedBorder: InputBorder.none,
                                     hintText: "0.00",
                                     hintStyle: TextStyle(
-                                      color: isDark 
-                                          ? Colors.white10 
+                                      color: isDark
+                                          ? Colors.white10
                                           : Colors.grey.shade200,
                                     ),
                                     contentPadding: EdgeInsets.zero,
@@ -460,11 +487,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 40),
 
                   // 2. Recipient Card
@@ -473,7 +499,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: cardColor,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isDark 
+                        color: isDark
                             ? AppTheme.darkBorderColor
                             : AppTheme.borderColor,
                       ),
@@ -485,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.all(4), 
+                    padding: const EdgeInsets.all(4),
                     child: Column(
                       children: [
                         TextField(
@@ -501,30 +527,42 @@ class _HomeScreenState extends State<HomeScreen> {
                           decoration: InputDecoration(
                             hintText: "Enter UPI ID or Number",
                             fillColor: Colors.transparent,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
                             suffixIcon: Padding(
                               padding: const EdgeInsets.only(right: 8.0),
-                              child: _isChecking 
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12.0),
-                                    child: SizedBox(
-                                      width: 20, 
-                                      height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                                    ),
-                                  )
-                                : _isVerified
-                                  ? const Icon(Icons.check_circle, color: AppTheme.successColor)
+                              child: _isChecking
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12.0),
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                        ),
+                                      ),
+                                    )
+                                  : _isVerified
+                                  ? const Icon(
+                                      Icons.check_circle,
+                                      color: AppTheme.successColor,
+                                    )
                                   : TextButton(
                                       onPressed: _checkRecipient,
                                       style: TextButton.styleFrom(
-                                        foregroundColor: isDark 
-                                            ? const Color(0xFF60A5FA) // Lighter blue for dark mode
+                                        foregroundColor: isDark
+                                            ? const Color(
+                                                0xFF60A5FA,
+                                              ) // Lighter blue for dark mode
                                             : AppTheme.primaryColor,
-                                        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                                        textStyle: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                       child: const Text("Check"),
                                     ),
@@ -534,12 +572,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (_isVerified) ...[
                           const Divider(height: 1, indent: 16, endIndent: 16),
                           ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             title: Text(
                               _receiverInfo?.name ?? "Unknown",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                                color: isDark
+                                    ? AppTheme.darkTextPrimary
+                                    : AppTheme.textPrimary,
                               ),
                             ),
                             subtitle: Column(
@@ -549,7 +592,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     _receiverInfo!.bank!,
                                     style: TextStyle(
-                                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                                      color: isDark
+                                          ? AppTheme.darkTextSecondary
+                                          : AppTheme.textSecondary,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -559,13 +604,26 @@ class _HomeScreenState extends State<HomeScreen> {
                                     Icon(
                                       Icons.verified_user_rounded,
                                       size: 14,
-                                      color: _parseBackendColor(_receiverInfo?.color, (_receiverInfo?.verified ?? false) ? AppTheme.successColor : Colors.orange),
+                                      color: _parseBackendColor(
+                                        _receiverInfo?.color,
+                                        (_receiverInfo?.verified ?? false)
+                                            ? AppTheme.successColor
+                                            : Colors.orange,
+                                      ),
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      _receiverInfo?.label ?? ((_receiverInfo?.verified ?? false) ? "Verified Details" : "Not Verified"),
+                                      _receiverInfo?.label ??
+                                          ((_receiverInfo?.verified ?? false)
+                                              ? "Verified Details"
+                                              : "Not Verified"),
                                       style: TextStyle(
-                                        color: _parseBackendColor(_receiverInfo?.color, (_receiverInfo?.verified ?? false) ? AppTheme.successColor : Colors.orange),
+                                        color: _parseBackendColor(
+                                          _receiverInfo?.color,
+                                          (_receiverInfo?.verified ?? false)
+                                              ? AppTheme.successColor
+                                              : Colors.orange,
+                                        ),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -588,12 +646,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B),
+                      color: isDark
+                          ? AppTheme.darkTextSecondary
+                          : const Color(0xFF64748B),
                       letterSpacing: 1.2,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
+
                   Consumer<SettingsProvider>(
                     builder: (context, settings, child) {
                       return Row(
@@ -608,7 +668,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 if (settings.historyFeatureUnlocked) {
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (context) => const HistoryScreen()),
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const HistoryScreen(),
+                                    ),
                                   );
                                 } else {
                                   _showFeatureLockedMessage(context, "History");
@@ -629,17 +692,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                 if (settings.advancedAnalyticsUnlocked) {
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (context) => const AnalyticsScreen()),
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const AnalyticsScreen(),
+                                    ),
                                   );
                                 } else {
-                                  _showFeatureLockedMessage(context, "Analytics");
+                                  _showFeatureLockedMessage(
+                                    context,
+                                    "Analytics",
+                                  );
                                 }
                               },
                               isDark: isDark,
                               cardColor: cardColor,
                             ),
                           ),
-
                         ],
                       );
                     },
@@ -650,7 +718,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          
+
           // 5. Sticky Bottom Action
           Container(
             padding: const EdgeInsets.all(20),
@@ -671,11 +739,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.shield_outlined, size: 14, color: AppTheme.successColor),
+                      Icon(
+                        Icons.shield_outlined,
+                        size: 14,
+                        color: AppTheme.successColor,
+                      ),
                       SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          "All risk analysis happens on-device • No data shared",
+                          "Verified by Sentra AI • Encrypted & Secure",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppTheme.textSecondary,
@@ -698,7 +770,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () async {
                             final result = await Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const QrScannerScreen()),
+                              MaterialPageRoute(
+                                builder: (context) => const QrScannerScreen(),
+                              ),
                             );
                             if (result != null && result is String) {
                               String? vpa;
@@ -710,9 +784,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 } catch (e) {
                                   // Invalid URI
                                 }
-                              } 
+                              }
                               // 2. Try raw VPA (Simple Regex)
-                              else if (RegExp(r'^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$').hasMatch(result)) {
+                              else if (RegExp(
+                                r'^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$',
+                              ).hasMatch(result)) {
                                 vpa = result;
                               }
 
@@ -724,7 +800,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text("🚫 Invalid QR Code. Please scan a valid UPI QR."),
+                                    content: Text(
+                                      "🚫 Invalid QR Code. Please scan a valid UPI QR.",
+                                    ),
                                     backgroundColor: Color(0xFFEF4444),
                                     behavior: SnackBarBehavior.floating,
                                   ),
@@ -785,7 +863,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     Icon(
                       icon,
                       color: isLocked
-                          ? (isDark ? Colors.grey.shade700 : Colors.grey.shade400)
+                          ? (isDark
+                                ? Colors.grey.shade700
+                                : Colors.grey.shade400)
                           : AppTheme.primaryColor,
                       size: 28,
                     ),
@@ -816,7 +896,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontWeight: FontWeight.w600,
                     color: isLocked
                         ? (isDark ? Colors.grey.shade700 : Colors.grey.shade400)
-                        : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                        : (isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.textPrimary),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -836,7 +918,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 12),
             Expanded(
-              child: Text('Unlock $featureName in Settings to access this feature'),
+              child: Text(
+                'Unlock $featureName in Settings to access this feature',
+              ),
             ),
           ],
         ),
@@ -858,7 +942,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showReportFraudDialog(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -881,10 +965,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 12),
             const Text(
               "Report Fraud",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -896,7 +977,9 @@ class _HomeScreenState extends State<HomeScreen> {
               "Help us keep the community safe by reporting suspicious UPI IDs or phone numbers.",
               style: TextStyle(
                 fontSize: 14,
-                color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                color: isDark
+                    ? AppTheme.darkTextSecondary
+                    : AppTheme.textSecondary,
                 height: 1.5,
               ),
             ),
@@ -929,7 +1012,9 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text(
               "Cancel",
               style: TextStyle(
-                color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                color: isDark
+                    ? AppTheme.darkTextSecondary
+                    : AppTheme.textSecondary,
               ),
             ),
           ),
@@ -938,7 +1023,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Report submitted. Thank you for keeping us safe!'),
+                  content: Text(
+                    'Report submitted. Thank you for keeping us safe!',
+                  ),
                   backgroundColor: Color(0xFF10B981),
                 ),
               );

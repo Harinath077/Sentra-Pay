@@ -2,7 +2,6 @@ import 'dart:math';
 import 'user_profile.dart';
 import '../services/api_service.dart';
 import '../services/risk_engine.dart';
-import 'risk_data.dart';
 
 enum RiskCategory { low, medium, high }
 
@@ -38,11 +37,12 @@ class RiskAnalysisResult {
 
 class FraudStore {
   // 1. App-Level User Identity
-  static String appUserId = "USER-${Random().nextInt(99999).toString().padLeft(5, '0')}";
-  
+  static String appUserId =
+      "USER-${Random().nextInt(99999).toString().padLeft(5, '0')}";
+
   // 2. Demo Mode Flag
   static bool isDemoMode = false;
-  
+
   // 3. Local "Legit" & "Fraud" Database (Simulation)
   static final Map<String, double> _receiverReputation = {
     "merchant@upi": 0.1, // Safe
@@ -52,14 +52,14 @@ class FraudStore {
   };
 
   static final Set<String> _reportedIDs = {};
-  
+
   // Transaction History Storage
   static final List<Map<String, dynamic>> _transactionHistory = [];
-  
+
   // Get transaction history
-  static List<Map<String, dynamic>> get transactionHistory => 
+  static List<Map<String, dynamic>> get transactionHistory =>
       List.unmodifiable(_transactionHistory);
-  
+
   // Add transaction to history
   static void addTransaction({
     required String receiver,
@@ -74,7 +74,7 @@ class FraudStore {
       'timestamp': timestamp,
       'via': 'UPI',
     });
-    
+
     // Keep only last 50 transactions
     if (_transactionHistory.length > 50) {
       _transactionHistory.removeLast();
@@ -101,21 +101,21 @@ class FraudStore {
       if (id.contains("scammer")) return "Suspicious Account";
       if (id.contains("merchant")) return "Mega Store Ltd";
     }
-    
+
     // In normal mode, simulate based on hardcoded DB
     if (_receiverReputation.containsKey(id)) {
       double score = _receiverReputation[id]!;
       if (score < 0.3) return "Verified Merchant";
       if (score > 0.8) return "Flagged Account";
     }
-    
+
     return null; // Unknown
   }
 
   static void report(String id) {
     _reportedIDs.add(id);
     _receiverReputation[id] = 1.0; // Mark local as high risk
-    
+
     // Call Backend (Fire and forget)
     ApiService.reportFraud(id);
   }
@@ -125,7 +125,11 @@ class FraudStore {
   }
 
   // Core Risk Logic using Real Risk Engine
-  static RiskAnalysisResult analyzeRisk(String recipientId, double amount, {UserProfile? user}) {
+  static RiskAnalysisResult analyzeRisk(
+    String recipientId,
+    double amount, {
+    UserProfile? user,
+  }) {
     // Get list of known receivers
     List<String> previousReceivers = _transactionHistory
         .map((t) => t['receiver'] as String? ?? '')
@@ -134,7 +138,8 @@ class FraudStore {
         .toList();
 
     // Check if receiver is new
-    bool isNewReceiver = !previousReceivers.contains(recipientId) &&
+    bool isNewReceiver =
+        !previousReceivers.contains(recipientId) &&
         !(user?.commonVPAs.contains(recipientId) ?? false);
 
     // Call the real risk engine
@@ -176,12 +181,19 @@ class FraudStore {
   }
 
   // ADDED ASYNC VERSION FOR BACKEND CALLS
-  static Future<RiskAnalysisResult> analyzeRiskAsync(String recipientId, double amount, {UserProfile? user, String? token}) async {
+  static Future<RiskAnalysisResult> analyzeRiskAsync(
+    String recipientId,
+    double amount, {
+    UserProfile? user,
+    String? token,
+  }) async {
     // 1. Try to get result from backend
     final result = await ApiService.analyzeRisk(
       receiverUpi: recipientId,
       amount: amount,
-      token: token ?? "demo-token", // Pass fallback if null here or let ApiService handle
+      token:
+          token ??
+          "demo-token", // Pass fallback if null here or let ApiService handle
     );
 
     if (result != null) {

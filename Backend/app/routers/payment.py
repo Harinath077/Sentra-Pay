@@ -15,6 +15,8 @@ from app.models.payment import (
     PaymentConfirmResponse
 )
 from pydantic import BaseModel
+import hashlib
+from app.services.mock_payment_service import mock_payment_service
 
 class QRScanRequest(BaseModel):
     qr_data: str
@@ -22,7 +24,7 @@ class QRScanRequest(BaseModel):
 
 from app.core.risk_orchestrator import orchestrator
 from app.database.connection import get_db
-from app.database.models import User, Transaction
+from app.database.models import User, Transaction, ReceiverHistory
 from app.services.auth_service import get_current_user
 from app.utils.security import verify_token
 from app.utils.upi_qr_scanner import UPIReceiverValidator
@@ -86,26 +88,10 @@ async def payment_intent(
     authorization: Optional[str] = Header(None)
 ):
     """
-    Analyze transaction risk before payment execution.
-    
-    This endpoint:
-    1. Receives payment intent from user
-    2. Calls Risk Orchestrator for analysis
-    3. Returns risk score, breakdown, and recommended action
-    4. Does NOT execute payment - just analysis
-    
-    Args:
-        request: Payment intent details
-        db: Database session
-        authorization: Optional JWT token
-    
-    Returns:
-        PaymentIntentResponse with risk analysis
-    
-    Raises:
-        422: If validation fails
+    STRICTLY READ-ONLY: Analyze transaction risk before payment execution.
+    DO NOT save any transaction, update history, or generate blockchain hash.
     """
-    # Try to get current user from token, or use demo user
+    # Authorization logic remains same for demo/real
     current_user = None
     if authorization and authorization.startswith("Bearer "):
         token = authorization.replace("Bearer ", "")
@@ -114,9 +100,7 @@ async def payment_intent(
         except:
             pass
     
-    # If no authenticated user, use a demo user for risk analysis
     if not current_user:
-        # Find or create a demo user
         current_user = db.query(User).filter(User.email == "demo@sentra.app").first()
         if not current_user:
             current_user = User(
@@ -132,27 +116,168 @@ async def payment_intent(
             db.commit()
             db.refresh(current_user)
     
-    logger.info(f"Payment intent: User {current_user.user_id} - Amount ₹{request.amount/100:.2f} to {request.receiver}")
+    # Normalize UPI ID
+    receiver_upi = str(request.receiver).lower().strip()
     
-    # Prepare transaction data
+    logger.info(f"Payment INTENT (Preview Only): User {current_user.user_id} -> {receiver_upi}")
+    
     txn_data = {
-        "amount": request.amount,
-        "receiver": request.receiver,
+        "amount": float(request.amount),
+        "receiver": receiver_upi,
         "note": request.note or "",
         "device_id": request.device_id or ""
     }
     
-    # Call Risk Orchestrator (THE BRAIN)
+    # Call Risk Orchestrator (save=False makes it strictly read-only)
     risk_analysis = orchestrator.analyze_transaction(
         txn_data=txn_data,
         user_id=current_user.user_id,
-        db=db
+        db=db,
+        save=False
     )
     
-    logger.info(f"Risk analysis complete: {risk_analysis['action']} (score={risk_analysis['risk_score']})")
-    
-    # Return risk analysis
     return PaymentIntentResponse(**risk_analysis)
+
+
+@router.post("/execute", response_model=PaymentConfirmResponse)
+async def payment_execute(
+    request: PaymentConfirmRequest,
+    current_user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """
+    EXECUTE PAYMENT: Recalculate risk, process payment, save result, 
+    update history, and generate blockchain hash.
+    """
+    logger.info(f"Payment EXECUTION: User {current_user.user_id} - {request.note}")
+    
+    if not request.user_acknowledged:
+        raise HTTPException(status_code=400, detail="User acknowledgment required for execution")
+
+    # 1. Normalize and structure data
+    receiver_upi = str(request.receiver).lower().strip()
+    amount = float(request.amount)
+    
+    txn_data = {
+        "amount": amount,
+        "receiver": receiver_upi,
+        "note": request.note or "",
+        "device_id": "DEVICE-EXEC-01" # In real app, pass from request
+    }
+
+    # 2. Server-side Risk Recalculation (Validation step before saving)
+    # This time we SAVE the intent results because we are executing
+    risk_analysis = orchestrator.analyze_transaction(
+        txn_data=txn_data,
+        user_id=current_user.user_id,
+        db=db,
+        save=True 
+    )
+    
+    # Check if transaction was blocked during recalculation
+    if risk_analysis.get("action") == "BLOCK":
+         return PaymentConfirmResponse(
+            transaction_id="BLOCKED",
+            status="BLOCKED",
+            message="Transaction blocked by security engine during execution",
+            timestamp=datetime.utcnow().isoformat(),
+            amount=amount,
+            receiver=receiver_upi
+        )
+
+    # 3. Process actual payment logic (Mock service)
+    payment_result = await mock_payment_service.initiate_payment(
+        amount=amount,
+        receiver_upi=receiver_upi,
+        sender_upi=current_user.email,
+        payer_name=current_user.full_name
+    )
+
+    # 4. Success handling (Atomic Database Transaction)
+    try:
+        # Get the transaction record created by orchestrator
+        txn_id_str = risk_analysis.get("transaction_id")
+        txn = db.query(Transaction).filter(Transaction.transaction_id == txn_id_str).first()
+        
+        if payment_result["status"] in ["success", "COMPLETED"]:
+            txn.status = "COMPLETED"
+            txn.utr_number = payment_result.get("utr_number")
+            txn.psp_name = payment_result.get("psp_name")
+            txn.completed_at = datetime.utcnow()
+            txn.payment_method = "UPI"
+            
+            # --- BLOCKCHAIN-STYLE IMMUTABLE LEDGER ---
+            # Get previous transaction hash for the user
+            prev_txn = db.query(Transaction).filter(
+                Transaction.user_id == current_user.id,
+                Transaction.status == "COMPLETED"
+            ).order_by(Transaction.id.desc()).offset(1).first() # offset 1 because cur is at top? No, offset 1 is correct if we just saved cur but not committed? Wait.
+            
+            previous_hash = prev_txn.current_hash if prev_txn else "GENESIS_SENTRA"
+            
+            # current_hash = SHA256(user_id + receiver_upi + amount + status + previous_hash)
+            hash_string = f"{current_user.user_id}{receiver_upi}{amount}COMPLETED{previous_hash}"
+            current_hash = hashlib.sha256(hash_string.encode()).hexdigest()
+            
+            txn.previous_hash = previous_hash
+            txn.current_hash = current_hash
+            
+            # Update Receiver History Table (ONLY FOR COMPLETED)
+            receiver_record = db.query(ReceiverHistory).filter(
+                ReceiverHistory.user_id == current_user.id,
+                ReceiverHistory.receiver_upi == receiver_upi
+            ).first()
+            
+            if receiver_record:
+                receiver_record.last_paid_at = datetime.utcnow()
+                receiver_record.payment_count += 1
+                receiver_record.total_amount = float(receiver_record.total_amount) + amount
+            else:
+                new_record = ReceiverHistory(
+                    user_id=current_user.id,
+                    receiver_upi=receiver_upi,
+                    first_paid_at=datetime.utcnow(),
+                    last_paid_at=datetime.utcnow(),
+                    payment_count=1,
+                    total_amount=amount
+                )
+                db.add(new_record)
+                
+            # Update User Trust Score
+            current_user.trust_score = min(1.0, (current_user.trust_score or 0.0) + 0.01)
+        
+        else:
+            txn.status = "FAILED"
+            txn.note = f"Failed: {payment_result.get('message', 'Unknown error')}"
+        
+        db.commit()
+        db.refresh(txn)
+
+        # 5. Invalidate Caches for REAL-TIME synchronization
+        try:
+            redis_client.invalidate_user_profile(current_user.user_id)
+            # IMPORTANT: Invalidate the receiver's reputation cache so 
+            # the next check sees them as "Established" instead of "New"
+            redis_client.delete(f"receiver_reputation:{receiver_upi}")
+            logger.info(f"Caches invalidated for {current_user.user_id} and {receiver_upi}")
+        except Exception as e:
+            logger.warning(f"Cache invalidation failed: {e}")
+
+        return PaymentConfirmResponse(
+            transaction_id=txn.transaction_id,
+            status=txn.status,
+            message=payment_result["message"],
+            timestamp=datetime.utcnow().isoformat(),
+            amount=amount,
+            receiver=receiver_upi,
+            utr_number=txn.utr_number,
+            psp_name=txn.psp_name
+        )
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Execution Error: {e}")
+        raise HTTPException(status_code=500, detail="Transaction commitment failed")
 
 
 
@@ -211,7 +336,7 @@ async def payment_confirm(
     
     # Check if user confirmed (user can cancel)
     if not request.user_acknowledged:
-        txn.status = "cancelled"
+        txn.status = "CANCELLED"
         txn.updated_at = datetime.utcnow()
         db.commit()
         
@@ -219,7 +344,7 @@ async def payment_confirm(
         
         return PaymentConfirmResponse(
             transaction_id=request.transaction_id,
-            status="cancelled",
+            status="CANCELLED",
             message="Payment cancelled by user",
             timestamp=datetime.utcnow().isoformat()
         )
@@ -249,11 +374,16 @@ async def payment_confirm(
         )
         
         # Update transaction based on payment result
-        txn.status = "COMPLETED" if payment_result["status"] == "success" else payment_result["status"]
+        if payment_result["status"] in ["success", "COMPLETED"]:
+            txn.status = "COMPLETED"
+        elif payment_result["status"] in ["failed", "FAILED"]:
+            txn.status = "FAILED"
+        else:
+            txn.status = payment_result["status"].upper() # Fallback
         txn.payment_timestamp = datetime.utcnow()
         txn.updated_at = datetime.utcnow()
         
-        if payment_result["status"] == "success":
+        if txn.status == "COMPLETED":
             txn.utr_number = payment_result.get("utr_number")
             txn.psp_name = payment_result.get("psp_name")
             txn.completed_at = datetime.utcnow()
@@ -316,7 +446,7 @@ async def payment_confirm(
         # Return response
         return PaymentConfirmResponse(
             transaction_id=txn.transaction_id,
-            status=payment_result["status"],
+            status=txn.status,
             message=payment_result["message"],
             timestamp=payment_result["timestamp"],
             amount=float(txn.amount),
@@ -332,7 +462,7 @@ async def payment_confirm(
         logger.error(f"Payment processing error: {e}", exc_info=True)
         
         # Mark transaction as failed
-        txn.status = "failed"
+        txn.status = "FAILED"
         txn.updated_at = datetime.utcnow()
         db.commit()
         

@@ -121,6 +121,85 @@ def authenticate_user(db: Session, login_data: LoginRequest) -> User:
     return user
 
 
+async def authenticate_google_user(db: Session, id_token_str: str) -> User:
+    """
+    Authenticate a user using Google OAuth2 ID Token.
+    
+    Args:
+        db: Database session
+        id_token_str: Google ID Token from frontend
+        
+    Returns:
+        User object
+    """
+    from google.oauth2 import id_token
+    from google.auth.transport import requests
+    import uuid
+    from datetime import datetime
+    
+    try:
+        # Verify the ID token
+        id_info = id_token.verify_oauth2_token(
+            id_token_str, 
+            requests.Request(), 
+            settings.GOOGLE_CLIENT_ID
+        )
+        
+        # Extract user info
+        email = id_info['email']
+        name = id_info.get('name', email.split('@')[0])
+        google_id = id_info['sub']
+        
+        # Check if user exists by google_id
+        user = db.query(User).filter(User.google_id == google_id).first()
+        
+        if not user:
+            # Check if user exists by email (Link if already exists)
+            user = db.query(User).filter(User.email == email).first()
+            
+            if user:
+                # Link existing email account to Google
+                user.google_id = google_id
+                user.login_method = "google"
+                user.is_verified = True
+                user.auth_provider = "google"
+            else:
+                # Create new Google user
+                user = User(
+                    email=email,
+                    full_name=name,
+                    google_id=google_id,
+                    login_method="google",
+                    is_verified=True,
+                    auth_provider="google",
+                    trust_score=0.0,
+                    risk_tier="BRONZE",
+                    known_devices=[]
+                )
+                db.add(user)
+        
+        user.last_login = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        
+        logger.info(f"Google user authenticated: {user.user_id} - {user.email}")
+        return user
+        
+    except ValueError as e:
+        logger.error(f"Invalid Google ID Token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google ID Token"
+        )
+    except Exception as e:
+        logger.error(f"Google authentication error: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google authentication failed"
+        )
+    
+
 def generate_auth_response(user: User) -> AuthResponse:
     """
     Generate authentication response with user data and JWT token.

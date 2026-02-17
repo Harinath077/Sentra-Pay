@@ -36,10 +36,10 @@ class HybridFraudService {
 
       if (backendAvailable) {
         print('🔥 Using BACKEND ML Analysis');
-        
+
         // Get user profile for context
         var userProfile = await _authService.getUserProfile(userId);
-        
+
         // Call backend for ML-based analysis
         var backendResult = await _backendService.analyzeTransaction(
           userId: userId,
@@ -89,7 +89,9 @@ class HybridFraudService {
         riskLevel: analysisResult['riskLevel'],
         decision: analysisResult['decision'],
         riskBreakdown: analysisResult['riskBreakdown'],
-        analysisFactors: List<String>.from(analysisResult['analysisFactors'] ?? []),
+        analysisFactors: List<String>.from(
+          analysisResult['analysisFactors'] ?? [],
+        ),
       );
 
       // Step 4: Update user stats
@@ -101,14 +103,15 @@ class HybridFraudService {
 
       // Add metadata
       analysisResult['transactionId'] = transactionId;
-      analysisResult['analysisMethod'] = backendUsed ? 'BACKEND_ML' : 'LOCAL_RULES';
+      analysisResult['analysisMethod'] = backendUsed
+          ? 'BACKEND_ML'
+          : 'LOCAL_RULES';
       analysisResult['timestamp'] = DateTime.now().toIso8601String();
 
       return analysisResult;
-
     } catch (e) {
       print('Error in hybrid fraud analysis: $e');
-      
+
       // Ultimate fallback to local analysis
       return await _localAnalysis(
         userId: userId,
@@ -127,7 +130,7 @@ class HybridFraudService {
     required double amount,
   }) async {
     // Use existing local FraudStore logic
-    var localResult = await _localFraudStore.analyzeRisk(
+    var localResult = _localFraudStore.analyzeRisk(
       recipientVPA: recipientVPA,
       recipientName: recipientName,
       amount: amount,
@@ -173,9 +176,11 @@ class HybridFraudService {
           analysisResult['riskScore'] = adjustedRisk;
           analysisResult['riskLevel'] = _getRiskLevel(adjustedRisk);
           analysisResult['decision'] = _getDecisionFromRisk(adjustedRisk);
-          
+
           // Add factor
-          List<String> factors = List<String>.from(analysisResult['analysisFactors'] ?? []);
+          List<String> factors = List<String>.from(
+            analysisResult['analysisFactors'] ?? [],
+          );
           factors.add('⚠️ Community Alert: $reportCount fraud reports');
           analysisResult['analysisFactors'] = factors;
         }

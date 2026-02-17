@@ -3,27 +3,36 @@ import 'package:http/http.dart' as http;
 import '../models/user_profile.dart';
 import '../models/fraud_store.dart';
 import '../models/receiver_info.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ApiService {
-  // Use http://10.0.2.2:8000 for Android Emulator
-  // Use http://localhost:8000 for Chrome/Web
-  // Use http://10.0.2.2:8000 for Android Emulator
-  // Use http://localhost:8000 for Chrome/Web
-  // Use http://172.16.124.136:8000 for Physical Device (Same Wi-Fi)
-  static const String baseUrl = "http://localhost:8000/api";
+  static String get baseUrl {
+    if (kIsWeb) {
+      return "http://localhost:8000/api";
+    }
+    // Assume Android Emulator for non-web local dev
+    return "http://10.0.2.2:8000/api";
+  }
 
-  static Future<Map<String, dynamic>?> signup(String name, String email, String phone, String password) async {
+  static Future<Map<String, dynamic>?> signup(
+    String name,
+    String email,
+    String phone,
+    String password,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse("$baseUrl/auth/signup"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "full_name": name,
-          "email": email,
-          "phone": phone,
-          "password": password
-        }),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/auth/signup"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "full_name": name,
+              "email": email,
+              "phone": phone,
+              "password": password,
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -36,14 +45,19 @@ class ApiService {
     }
     return null;
   }
-  
-  static Future<Map<String, dynamic>?> login(String email, String password) async {
+
+  static Future<Map<String, dynamic>?> login(
+    String email,
+    String password,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse("$baseUrl/auth/login"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "password": password}),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/auth/login"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"email": email, "password": password}),
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -53,6 +67,28 @@ class ApiService {
       }
     } catch (e) {
       print("Login Error: $e");
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> googleLogin(String idToken) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/auth/google-login"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"id_token": idToken}),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        print("Backend Google Login Error: ${error['detail']}");
+      }
+    } catch (e) {
+      print("Google Login Error: $e");
     }
     return null;
   }
@@ -69,21 +105,23 @@ class ApiService {
         headers["Authorization"] = "Bearer $token";
       }
 
-      final response = await http.post(
-        Uri.parse("$baseUrl/payment/intent"),
-        headers: headers,
-        // Backend expects: amount, receiver, note, device_id
-        body: jsonEncode({
-          "amount": amount,
-          "receiver": receiverUpi,
-          "note": note ?? "Transfer",
-          "device_id": "DEV-APP-001" 
-        }),
-      ).timeout(const Duration(seconds: 4));
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/payment/intent"),
+            headers: headers,
+            // Backend expects: amount, receiver, note, device_id
+            body: jsonEncode({
+              "amount": amount,
+              "receiver": receiverUpi,
+              "note": note ?? "Transfer",
+              "device_id": "DEV-APP-001",
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         // Map backend response to Flutter RiskAnalysisResult
         String riskLevel = data['risk_level'] ?? "LOW";
         double score = (data['risk_score'] ?? 0.0).toDouble();
@@ -104,17 +142,20 @@ class ApiService {
         } else {
           category = RiskCategory.low;
         }
-        
+
         // Extract Breakdown scores if available
         double behaviorScore = 0.5;
         double amountScore = 0.5;
         double receiverScore = 0.5;
-        
+
         if (data['risk_breakdown'] != null) {
           final bd = data['risk_breakdown'];
-          if (bd['behavior_analysis'] != null) behaviorScore = (bd['behavior_analysis']['score'] ?? 50) / 100.0;
-          if (bd['amount_analysis'] != null) amountScore = (bd['amount_analysis']['score'] ?? 50) / 100.0;
-          if (bd['receiver_analysis'] != null) receiverScore = (bd['receiver_analysis']['score'] ?? 50) / 100.0;
+          if (bd['behavior_analysis'] != null)
+            behaviorScore = (bd['behavior_analysis']['score'] ?? 50) / 100.0;
+          if (bd['amount_analysis'] != null)
+            amountScore = (bd['amount_analysis']['score'] ?? 50) / 100.0;
+          if (bd['receiver_analysis'] != null)
+            receiverScore = (bd['receiver_analysis']['score'] ?? 50) / 100.0;
         }
 
         return RiskAnalysisResult(
@@ -125,14 +166,17 @@ class ApiService {
           behaviorScore: behaviorScore,
           amountScore: amountScore,
           receiverScore: receiverScore,
-          transactionId: data['transaction_id'], // Extract transaction ID from backend
+          transactionId:
+              data['transaction_id'], // Extract transaction ID from backend
           icon: data['icon'],
           color: data['color'],
           background: data['background'],
           label: data['label'],
         );
       } else {
-        print("Backend Risk Check Failed: ${response.statusCode} - ${response.body}");
+        print(
+          "Backend Risk Check Failed: ${response.statusCode} - ${response.body}",
+        );
       }
     } catch (e) {
       print("Risk Check Error: $e");
@@ -141,16 +185,18 @@ class ApiService {
   }
 
   // Check QR Code Risk
-  static Future<Map<String, dynamic>?> scanQr(String qrData, {double? amount}) async {
+  static Future<Map<String, dynamic>?> scanQr(
+    String qrData, {
+    double? amount,
+  }) async {
     try {
-      final response = await http.post(
-        Uri.parse("$baseUrl/payment/scan-qr"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "qr_data": qrData,
-          if (amount != null) "amount": amount,
-        }),
-      ).timeout(const Duration(seconds: 4));
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/payment/scan-qr"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"qr_data": qrData, "amount": ?amount}),
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -165,10 +211,12 @@ class ApiService {
 
   static Future<ReceiverInfo?> validateReceiver(String upiId) async {
     try {
-      final response = await http.get(
-        Uri.parse("$baseUrl/receiver/validate/$upiId"),
-        headers: {"Content-Type": "application/json"},
-      ).timeout(const Duration(seconds: 4));
+      final response = await http
+          .get(
+            Uri.parse("$baseUrl/receiver/validate/$upiId"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -185,31 +233,39 @@ class ApiService {
   static Future<Map<String, dynamic>?> confirmPayment({
     required String transactionId,
     required String token,
+    required double amount,
+    required String receiver,
+    String? note,
     bool userAcknowledged = true,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse("$baseUrl/payment/confirm"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-        body: jsonEncode({
-          "transaction_id": transactionId,
-          "user_acknowledged": userAcknowledged,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/payment/execute"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $token",
+            },
+            body: jsonEncode({
+              "transaction_id": transactionId,
+              "user_acknowledged": userAcknowledged,
+              "amount": amount,
+              "receiver": receiver,
+              "note": note ?? "Transfer",
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print("✅ Payment Confirmed: ${data['status']}");
+        print("✅ Payment Executed: ${data['status']}");
         return data;
       } else {
-        print("❌ Payment Confirmation Failed: ${response.statusCode}");
+        print("❌ Payment Execution Failed: ${response.statusCode}");
         print("Response: ${response.body}");
       }
     } catch (e) {
-      print("Payment Confirmation Error: $e");
+      print("Payment Execution Error: $e");
     }
     return null;
   }
@@ -219,13 +275,15 @@ class ApiService {
     required String token,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse("$baseUrl/payment/status/$transactionId"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(
+            Uri.parse("$baseUrl/payment/status/$transactionId"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $token",
+            },
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -241,13 +299,15 @@ class ApiService {
 
   static Future<List<dynamic>> getTransactionHistory(String token) async {
     try {
-      final response = await http.get(
-        Uri.parse("$baseUrl/payment/history"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(
+            Uri.parse("$baseUrl/payment/history"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $token",
+            },
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -262,14 +322,16 @@ class ApiService {
 
   static Future<void> reportFraud(String receiverUpi) async {
     try {
-      final response = await http.post(
-        Uri.parse("$baseUrl/receiver/report"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "vpa": receiverUpi,
-          "reason": "User reported from app",
-        }),
-      ).timeout(const Duration(seconds: 4));
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/receiver/report"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "vpa": receiverUpi,
+              "reason": "User reported from app",
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         print("Reported fraud successfully.");
@@ -282,7 +344,11 @@ class ApiService {
   }
 
   // Helper to create offline user when backend is down
-  static UserProfile _createOfflineUser(String name, String email, String phone) {
+  static UserProfile _createOfflineUser(
+    String name,
+    String email,
+    String phone,
+  ) {
     return UserProfile(
       userId: 'UID-OFFLINE-${DateTime.now().millisecondsSinceEpoch}',
       securityId: 'SEC-OFFLINE',

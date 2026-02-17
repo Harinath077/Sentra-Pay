@@ -4,7 +4,7 @@ Loads environment variables and provides application settings.
 """
 
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 import os
 
 
@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     RISK_THRESHOLD_LOW: float = 0.30
     RISK_THRESHOLD_MODERATE: float = 0.60
     RISK_THRESHOLD_HIGH: float = 0.80
+    
+    # OAuth Configuration
+    GOOGLE_CLIENT_ID: Optional[str] = None
     
     # Logging
     LOG_LEVEL: str = "INFO"

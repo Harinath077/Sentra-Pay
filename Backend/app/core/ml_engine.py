@@ -74,16 +74,42 @@ def predict(txn_data: Dict, context: UserContext) -> MLResult:
     
     # Get prediction
     if model_available and model is not None:
-        # Real model prediction
-        feature_vector = [features[f"feature_{i}"] for i in range(1, 15)]
-        ml_score = float(model.predict_proba([feature_vector])[0][1])
-        model_version = "v1.0"
-        logger.info(f"ML prediction: {ml_score:.3f}")
+        # Real model prediction - updated to 22 features
+        try:
+            # We match the EXACT names and order from the model
+            feature_names = [
+                'amount', 'payment_mode', 'receiver_type', 'is_new_receiver', 
+                'avg_amount_7d', 'avg_amount_30d', 'max_amount_7d', 'txn_count_1h', 
+                'txn_count_24h', 'days_since_last_txn', 'night_txn_ratio', 
+                'location_mismatch', 'is_night', 'is_round_amount', 'velocity_check', 
+                'deviation_from_sender_avg', 'exceeds_recent_max', 'amount_log', 
+                'hour_sin', 'hour_cos', 'ratio_30d', 'risk_profile'
+            ]
+            
+            # Ensure features are correctly typed (CatBoost is strict about categorical types)
+            feature_vector = []
+            for i, name in enumerate(feature_names):
+                val = float(features.get(name, 0.0))
+                # Features at indices 1, 2, 21 are categorical (payment_mode, receiver_type, risk_profile)
+                if i in [1, 2, 21]:
+                    feature_vector.append(int(val))
+                else:
+                    feature_vector.append(val)
+            
+            # Predict probability
+            ml_score = float(model.predict_proba([feature_vector])[0][1])
+            model_version = getattr(settings, "ML_MODEL_VERSION", "v1.1")
+            
+            logger.info(f"ML prediction: {ml_score:.3f} using {len(feature_vector)} features")
+        except Exception as e:
+            logger.error(f"Error during ML inference: {e}")
+            ml_score = calculate_fallback_score(features)
+            model_version = "v1.1-fallback"
     else:
         # Fallback: Rule-based prediction
         ml_score = calculate_fallback_score(features)
-        model_version = "fallback"
-        logger.debug(f"Fallback prediction: {ml_score:.3f}")
+        model_version = "rule-fallback"
+        logger.debug(f"Rule-fallback prediction: {ml_score:.3f}")
     
     return MLResult(
         ml_score=ml_score,
@@ -94,32 +120,10 @@ def predict(txn_data: Dict, context: UserContext) -> MLResult:
 
 def engineer_features(txn_data: Dict, context: UserContext) -> Dict:
     """
-    Engineer 14 features for ML model.
-    
-    Features:
-    1. amount_to_avg_ratio - Current amount / 30-day average
-    2. is_new_receiver - 1 if new, 0 if known
-    3. txn_velocity_5min - Transactions in last 5 minutes
-    4. txn_velocity_1hour - Transactions in last hour
-    5. days_since_last_txn - Days since last transaction
-    6. hour_of_day - 0-23
-    7. day_of_week - 0-6 (Monday=0)
-    8. device_change_flag - 1 if new device, 0 if known
-    9. receiver_reputation_score - 0.0-1.0 (fraud ratio)
-    10. avg_amount_30d - User's 30-day average
-    11. max_amount_30d - User's 30-day maximum
-    12. failed_txn_count_7d - Failed transactions in 7 days
-    13. user_tenure_days - Days since account creation
-    14. trust_score - User's trust score
-    
-    Args:
-        txn_data: Transaction data
-        context: User context
-    
-    Returns:
-        Dictionary with all features
+    Engineer 22 features for the upgraded ML model.
+    Exactly aligned with upi_fraud_hackathon_v4_replica_complete.csv schema.
     """
-    amount = txn_data.get("amount", 0.0)
+    amount = float(txn_data.get("amount", 0.0))
     receiver = txn_data.get("receiver", "")
     device_id = txn_data.get("device_id", "")
     
@@ -127,77 +131,81 @@ def engineer_features(txn_data: Dict, context: UserContext) -> Dict:
     profile = context.user_profile
     receiver_info = context.receiver_info or {}
     
-    # Feature 1: Amount to average ratio
-    avg_amount = stats.get("avg_amount_30d", 1000.0)  # Default baseline
-    if avg_amount == 0:
-        avg_amount = 1000.0
-    amount_to_avg_ratio = amount / avg_amount
-    
-    # Feature 2: Is new receiver
-    is_new_receiver = 1.0 if receiver_info.get("is_new", False) else 0.0
-    
-    # Feature 3-4: Velocity
-    txn_velocity_5min = float(stats.get("txn_count_5min", 0))
-    txn_velocity_1hour = float(stats.get("txn_count_1hour", 0))
-    
-    # Feature 5: Days since last transaction
-    days_since_last_txn = float(stats.get("days_since_last_txn", 999))
-    
-    # Feature 6-7: Time features
     now = datetime.utcnow()
-    hour_of_day = float(now.hour)
-    day_of_week = float(now.weekday())
+    hour = now.hour
     
-    # Feature 8: Device change
-    known_devices = profile.get("known_devices", [])
-    device_change_flag = 1.0 if device_id and device_id not in known_devices else 0.0
+    # 1. Base Features
+    avg_7d = stats.get("avg_amount_7d", 0.0)
+    avg_30d = stats.get("avg_amount_30d", 1000.0)
+    if avg_30d == 0: avg_30d = 1000.0
     
-    # Feature 9: Receiver reputation
-    receiver_reputation_score = receiver_info.get("reputation_score", 0.5)
+    # night_txn_ratio calculation
+    night_ratio = stats.get("night_txn_ratio", 0.0)
     
-    # Feature 10-11: Amount statistics
-    avg_amount_30d = stats.get("avg_amount_30d", 0.0)
-    max_amount_30d = stats.get("max_amount_30d", 0.0)
+    # is_night flag (23:00 to 05:00)
+    is_night = 1.0 if hour >= 23 or hour <= 5 else 0.0
     
-    # Feature 12: Failed transactions
-    failed_txn_count_7d = float(stats.get("failed_txn_count_7d", 0))
+    # is_round_amount
+    is_round = 1.0 if amount > 0 and amount % 100 == 0 else 0.0
     
-    # Feature 13: User tenure
-    user_tenure_days = float(stats.get("user_tenure_days", 0))
+    # velocity_check (Trigger if frequency is 3x the normal)
+    velocity_check = 1.0 if stats.get("txn_count_1hour", 0) > 5 else 0.0
     
-    # Feature 14: Trust score
-    trust_score = float(profile.get("trust_score", 0.0))
+    # deviation_from_sender_avg
+    deviation = amount / avg_30d
     
+    # exceeds_recent_max
+    max_7d = stats.get("max_amount_7d", 0.0)
+    exceeds_max = 1.0 if amount > max_7d and max_7d > 0 else 0.0
+
+    # 2. Advanced Derived Features
+    amount_log = np.log1p(amount)
+    
+    # Cyclical Time Features
+    hour_sin = np.sin(2 * np.pi * hour / 24)
+    hour_cos = np.cos(2 * np.pi * hour / 24)
+    
+    # ratio_30d
+    ratio_30d = amount / (avg_30d + 1.0)
+    
+    # risk_profile (Relationship score)
+    # If they have a risky history, this score is higher
+    risk_profile = receiver_info.get("reputation_score", 0.1)
+    if receiver_info.get("risky_history"):
+        risk_profile = max(risk_profile, 0.8)
+    elif receiver_info.get("good_history"):
+        risk_profile = min(risk_profile, 0.05)
+
     features = {
-        "feature_1": amount_to_avg_ratio,
-        "feature_2": is_new_receiver,
-        "feature_3": txn_velocity_5min,
-        "feature_4": txn_velocity_1hour,
-        "feature_5": days_since_last_txn,
-        "feature_6": hour_of_day,
-        "feature_7": day_of_week,
-        "feature_8": device_change_flag,
-        "feature_9": receiver_reputation_score,
-        "feature_10": avg_amount_30d,
-        "feature_11": max_amount_30d,
-        "feature_12": failed_txn_count_7d,
-        "feature_13": user_tenure_days,
-        "feature_14": trust_score,
-        # Named features for clarity
-        "amount_to_avg_ratio": amount_to_avg_ratio,
-        "is_new_receiver": is_new_receiver,
-        "txn_velocity_5min": txn_velocity_5min,
-        "txn_velocity_1hour": txn_velocity_1hour,
-        "days_since_last_txn": days_since_last_txn,
-        "hour_of_day": hour_of_day,
-        "day_of_week": day_of_week,
-        "device_change_flag": device_change_flag,
-        "receiver_reputation_score": receiver_reputation_score,
-        "avg_amount_30d": avg_amount_30d,
-        "max_amount_30d": max_amount_30d,
-        "failed_txn_count_7d": failed_txn_count_7d,
-        "user_tenure_days": user_tenure_days,
-        "trust_score": trust_score
+        "amount": amount,
+        "payment_mode": 2.0, # Default to UPI App
+        "receiver_type": 1.0 if "@" in receiver and not receiver.split("@")[0].isdigit() else 0.0,
+        "is_new_receiver": 1.0 if receiver_info.get("is_new", False) else 0.0,
+        "avg_amount_7d": avg_7d,
+        "avg_amount_30d": avg_30d,
+        "max_amount_7d": max_7d,
+        "txn_count_1h": float(stats.get("txn_count_1hour", 0)),
+        "txn_count_24h": float(stats.get("txn_count_24h", 0)),
+        "days_since_last_txn": float(stats.get("days_since_last_txn", 999)),
+        "night_txn_ratio": night_ratio,
+        "location_mismatch": 0.0, # Placeholder
+        "is_night": is_night,
+        "is_round_amount": is_round,
+        "velocity_check": velocity_check,
+        "deviation_from_sender_avg": deviation,
+        "exceeds_recent_max": exceeds_max,
+        "amount_log": amount_log,
+        "hour_sin": hour_sin,
+        "hour_cos": hour_cos,
+        "ratio_30d": ratio_30d,
+        "risk_profile": risk_profile,
+        
+        # Backward compatibility for fallback
+        "risky_history_flag": 1.0 if receiver_info.get("risky_history") else 0.0,
+        "good_history_flag": 1.0 if receiver_info.get("good_history") else 0.0,
+        "amount_to_avg_ratio": deviation,
+        "device_change_flag": 1.0 if device_id and device_id not in profile.get("known_devices", []) else 0.0,
+        "receiver_reputation_score": risk_profile
     }
     
     return features
@@ -206,59 +214,39 @@ def engineer_features(txn_data: Dict, context: UserContext) -> Dict:
 def calculate_fallback_score(features: Dict) -> float:
     """
     Calculate fallback fraud score when ML model is not available.
-    
-    Uses simple heuristics based on feature values.
-    This is NOT a substitute for a trained model, but allows development/testing.
-    
-    Args:
-        features: Engineered features
-    
-    Returns:
-        Fraud probability 0.0 - 1.0
+    Updated to use new feature keys from 22-feature engine.
     """
     score = 0.0
     
-    # High amount to average ratio
-    if features["amount_to_avg_ratio"] > 5:
+    # History Profile (High Confidence)
+    if features.get("risky_history_flag") == 1.0:
+        score += 0.35
+    elif features.get("good_history_flag") == 1.0:
+        score -= 0.15
+        
+    # High deviation/amount ratio
+    deviation = features.get("deviation_from_sender_avg", 1.0)
+    if deviation > 10:
+        score += 0.40
+    elif deviation > 5:
         score += 0.25
-    elif features["amount_to_avg_ratio"] > 3:
-        score += 0.15
     
     # New receiver
-    if features["is_new_receiver"] == 1.0:
-        score += 0.10
+    if features.get("is_new_receiver") == 1.0 and features.get("good_history_flag") == 0:
+        score += 0.15
     
     # Velocity spike
-    if features["txn_velocity_5min"] >= 3:
-        score += 0.20
-    elif features["txn_velocity_1hour"] >= 10:
-        score += 0.10
-    
-    # Dormant account
-    if features["days_since_last_txn"] > 30:
-        score += 0.15
-    
+    if features.get("txn_count_1h", 0) >= 5 or features.get("velocity_check") == 1.0:
+        score += 0.25
+        
     # Device change
-    if features["device_change_flag"] == 1.0:
-        score += 0.10
-    
-    # Bad receiver reputation
-    if features["receiver_reputation_score"] > 0.7:
-        score += 0.20
-    
-    # Failed transactions
-    if features["failed_txn_count_7d"] >= 3:
+    if features.get("device_change_flag") == 1.0:
         score += 0.15
+        
+    if features.get("risk_profile", 0.5) > 0.7:
+        score += 0.25
     
-    # Low trust score
-    if features["trust_score"] < 20:
-        score += 0.10
-    
-    # Unusual time (late night: 1 AM - 5 AM)
-    if 1 <= features["hour_of_day"] <= 5:
-        score += 0.05
-    
-    return min(score, 1.0)
+    return max(0.0, min(score, 1.0))
 
 
 # Load model on module import

@@ -5,7 +5,7 @@ import '../theme/app_theme.dart';
 class SecurityAnalysisLoader extends StatefulWidget {
   final VoidCallback? onComplete;
 
-  const SecurityAnalysisLoader({Key? key, this.onComplete}) : super(key: key);
+  const SecurityAnalysisLoader({super.key, this.onComplete});
 
   @override
   _SecurityAnalysisLoaderState createState() => _SecurityAnalysisLoaderState();
@@ -18,7 +18,7 @@ class _SecurityAnalysisLoaderState extends State<SecurityAnalysisLoader>
     "Analyzing user behavior",
     "Checking fraud patterns",
     "Verifying receiver",
-    "Calculating risk score"
+    "Calculating risk score",
   ];
 
   @override
@@ -31,9 +31,9 @@ class _SecurityAnalysisLoaderState extends State<SecurityAnalysisLoader>
     // Total duration ~2s to feel intentional (500ms per step)
     for (int i = 0; i < _steps.length; i++) {
       if (!mounted) return;
-      
+
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       setState(() {
         _currentStep = i;
       });
@@ -108,16 +108,13 @@ class _SecurityAnalysisLoaderState extends State<SecurityAnalysisLoader>
                 color: textColor,
               ),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             Text(
               "Sentra Pay AI is analyzing this transaction",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: subTextColor,
-              ),
+              style: TextStyle(fontSize: 12, color: subTextColor),
             ),
 
             const SizedBox(height: 30),
@@ -128,10 +125,10 @@ class _SecurityAnalysisLoaderState extends State<SecurityAnalysisLoader>
               String text = entry.value;
               bool isCompleted = idx < _currentStep;
               bool isCurrent = idx == _currentStep;
-              
+
               // Only show items up to current step + 1 (future steps are hidden or dim)
               // To keep it clean, let's show all but change opacities/icons
-              
+
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -143,33 +140,49 @@ class _SecurityAnalysisLoaderState extends State<SecurityAnalysisLoader>
                       height: 20,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isCompleted 
+                        color: isCompleted
                             ? const Color(0xFF10B981) // Success Green
-                            : (isCurrent ? AppTheme.primaryColor : Colors.grey.withOpacity(0.3)),
+                            : (isCurrent
+                                  ? AppTheme.primaryColor
+                                  : Colors.grey.withOpacity(0.3)),
                       ),
-                      child: isCompleted 
-                          ? const Icon(Icons.check, size: 14, color: Colors.white)
-                          : (isCurrent 
-                              ? const Padding(padding: EdgeInsets.all(4), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : null),
+                      child: isCompleted
+                          ? const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: Colors.white,
+                            )
+                          : (isCurrent
+                                ? const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : null),
                     ),
-                    
+
                     const SizedBox(width: 12),
-                    
+
                     Expanded(
                       child: Text(
                         text,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: isCurrent || isCompleted ? FontWeight.w600 : FontWeight.normal,
-                          color: isCurrent || isCompleted ? textColor : subTextColor!.withOpacity(0.5),
+                          fontWeight: isCurrent || isCompleted
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: isCurrent || isCompleted
+                              ? textColor
+                              : subTextColor!.withOpacity(0.5),
                         ),
                       ),
                     ),
                   ],
                 ),
               );
-            }).toList(),
+            }),
 
             const SizedBox(height: 24),
 
@@ -179,7 +192,9 @@ class _SecurityAnalysisLoaderState extends State<SecurityAnalysisLoader>
               child: LinearProgressIndicator(
                 value: (_currentStep + 1) / _steps.length,
                 backgroundColor: isDark ? Colors.grey[800] : Colors.grey[100],
-                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryColor,
+                ),
                 minHeight: 6,
               ),
             ),

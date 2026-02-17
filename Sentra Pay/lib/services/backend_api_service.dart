@@ -6,8 +6,9 @@ import 'firebase_auth_service.dart';
 /// Handles communication with your FastAPI backend for ML-based fraud detection
 class BackendApiService {
   // Update this to your backend URL
-  static const String baseUrl = 'http://localhost:8000'; // Change for production
-  
+  static const String baseUrl =
+      'http://localhost:8000'; // Change for production
+
   final FirebaseAuthService _authService = FirebaseAuthService();
 
   /// Get authorization headers with Firebase ID token
@@ -31,22 +32,21 @@ class BackendApiService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/signup'),
-        headers: headers,
-        body: jsonEncode({
-          'firebase_user_id': firebaseUserId,
-          'email': email,
-          'name': name,
-          'phone': phone,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/signup'),
+            headers: headers,
+            body: jsonEncode({
+              'firebase_user_id': firebaseUserId,
+              'email': email,
+              'name': name,
+              'phone': phone,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return {
-          'success': true,
-          'data': jsonDecode(response.body),
-        };
+        return {'success': true, 'data': jsonDecode(response.body)};
       } else {
         return {
           'success': false,
@@ -55,10 +55,7 @@ class BackendApiService {
       }
     } catch (e) {
       print('Error registering with backend: $e');
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -74,22 +71,24 @@ class BackendApiService {
   }) async {
     try {
       final headers = await _getHeaders();
-      
+
       final requestBody = {
         'user_id': userId,
         'recipient_vpa': recipientVPA,
         'amount': amount,
         'device_id': deviceId,
         'timestamp': DateTime.now().toIso8601String(),
-        if (userProfile != null) 'user_profile': userProfile,
+        'user_profile': ?userProfile,
       };
 
       print('Sending transaction analysis request to backend...');
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/payment/intent'),
-        headers: headers,
-        body: jsonEncode(requestBody),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/payment/intent'),
+            headers: headers,
+            body: jsonEncode(requestBody),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
@@ -128,14 +127,13 @@ class BackendApiService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/payment/verify-otp'),
-        headers: headers,
-        body: jsonEncode({
-          'transaction_id': transactionId,
-          'otp': otp,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/payment/verify-otp'),
+            headers: headers,
+            body: jsonEncode({'transaction_id': transactionId, 'otp': otp}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
@@ -145,16 +143,10 @@ class BackendApiService {
           'message': data['message'],
         };
       } else {
-        return {
-          'success': false,
-          'error': 'OTP verification failed',
-        };
+        return {'success': false, 'error': 'OTP verification failed'};
       }
     } catch (e) {
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -164,27 +156,17 @@ class BackendApiService {
   Future<Map<String, dynamic>> getUserProfile(String userId) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/user/$userId/profile'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/user/$userId/profile'), headers: headers)
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'data': jsonDecode(response.body),
-        };
+        return {'success': true, 'data': jsonDecode(response.body)};
       } else {
-        return {
-          'success': false,
-          'error': 'Failed to get user profile',
-        };
+        return {'success': false, 'error': 'Failed to get user profile'};
       }
     } catch (e) {
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -195,28 +177,21 @@ class BackendApiService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.put(
-        Uri.parse('$baseUrl/api/user/$userId/profile'),
-        headers: headers,
-        body: jsonEncode(updates),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/api/user/$userId/profile'),
+            headers: headers,
+            body: jsonEncode(updates),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'data': jsonDecode(response.body),
-        };
+        return {'success': true, 'data': jsonDecode(response.body)};
       } else {
-        return {
-          'success': false,
-          'error': 'Failed to update user profile',
-        };
+        return {'success': false, 'error': 'Failed to update user profile'};
       }
     } catch (e) {
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -226,27 +201,20 @@ class BackendApiService {
   Future<Map<String, dynamic>> getTransactionHistory(String userId) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/user/$userId/transactions'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/user/$userId/transactions'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'transactions': jsonDecode(response.body),
-        };
+        return {'success': true, 'transactions': jsonDecode(response.body)};
       } else {
-        return {
-          'success': false,
-          'error': 'Failed to get transaction history',
-        };
+        return {'success': false, 'error': 'Failed to get transaction history'};
       }
     } catch (e) {
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -254,27 +222,20 @@ class BackendApiService {
   Future<Map<String, dynamic>> getRiskAnalytics(String userId) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/analytics/risk/$userId'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/analytics/risk/$userId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'analytics': jsonDecode(response.body),
-        };
+        return {'success': true, 'analytics': jsonDecode(response.body)};
       } else {
-        return {
-          'success': false,
-          'error': 'Failed to get analytics',
-        };
+        return {'success': false, 'error': 'Failed to get analytics'};
       }
     } catch (e) {
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -283,9 +244,9 @@ class BackendApiService {
   /// Check if backend is available
   Future<bool> isBackendAvailable() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/health'),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(Uri.parse('$baseUrl/health'))
+          .timeout(const Duration(seconds: 5));
 
       return response.statusCode == 200;
     } catch (e) {
@@ -297,15 +258,12 @@ class BackendApiService {
   /// Get backend status
   Future<Map<String, dynamic>> getBackendStatus() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/health'),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(Uri.parse('$baseUrl/health'))
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
-        return {
-          'available': true,
-          'status': jsonDecode(response.body),
-        };
+        return {'available': true, 'status': jsonDecode(response.body)};
       } else {
         return {
           'available': false,
@@ -313,10 +271,7 @@ class BackendApiService {
         };
       }
     } catch (e) {
-      return {
-        'available': false,
-        'error': e.toString(),
-      };
+      return {'available': false, 'error': e.toString()};
     }
   }
 }

@@ -32,10 +32,18 @@ class RiskOrchestrator:
         self,
         txn_data: Dict,
         user_id: str,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        save: bool = False
     ) -> Dict:
         """
         Main orchestration method - THE BRAIN.
+        
+        Args:
+            txn_data: Transaction details
+            user_id: Public User ID (string)
+            db: Database session
+            save: If True, creates transaction record and logs event (for /execute).
+                  If False, strictly read-only (for /intent).
         """
         close_db = False
         if not db:
@@ -44,32 +52,33 @@ class RiskOrchestrator:
         
         try:
             transaction_id = self._generate_transaction_id()
-            receiver = txn_data.get("receiver", "")
-            amount = txn_data.get("amount", 0.0)
+            # Normalize receiver UPI strictly
+            receiver = str(txn_data.get("receiver", "")).lower().strip()
+            amount = float(txn_data.get("amount", 0.0))
             
-            logger.info(f"🧠 Orchestrating risk analysis: {transaction_id} - User: {user_id}")
+            logger.info(f"🧠 Orchestrating risk analysis: {transaction_id} (Save={save}) - User: {user_id}")
             
-            # Get User PK (int) first
+            # Get User PK (int)
             from app.database.models import User
             user_orm = db.query(User).filter(User.user_id == user_id).first()
             if not user_orm:
                 raise ValueError(f"User not found: {user_id}")
             
-            # Create PENDING Transaction Record (for FK and confirmation)
-            txn_params = {
-                "transaction_id": transaction_id,
-                "user_id": user_orm.id,
-                "amount": amount,
-                "receiver": receiver,
-                "note": txn_data.get("note", ""),
-                "status": "PENDING",
-                "device_id": txn_data.get("device_id", "")
-            }
-            
-            new_txn = Transaction(**txn_params)
-            db.add(new_txn)
-            db.commit()
-            db.refresh(new_txn)  # Get ID (int PK)
+            new_txn = None
+            if save:
+                # ONLY CREATE RECORD IF SAVE=TRUE (For Execution)
+                txn_params = {
+                    "transaction_id": transaction_id,
+                    "user_id": user_orm.id,
+                    "amount": amount,
+                    "receiver": receiver,
+                    "note": txn_data.get("note", ""),
+                    "status": "PENDING",
+                    "device_id": txn_data.get("device_id", "")
+                }
+                new_txn = Transaction(**txn_params)
+                db.add(new_txn)
+                # We don't commit yet, we wait for full analysis
             
             # ──────────────────────────────────────────────
             # STEP 1: GATHER CONTEXT
@@ -86,12 +95,13 @@ class RiskOrchestrator:
             if rule_result.hard_block:
                 logger.warning(f"⛔ HARD BLOCK: {rule_result.block_reason}")
                 
-                # Update Transaction status to BLOCKED & Risk Score 1.0
-                new_txn.status = "BLOCKED"
-                new_txn.risk_score = 1.0
-                new_txn.risk_level = "VERY_HIGH"
-                new_txn.action_taken = "BLOCK"
-                db.commit()
+                if save and new_txn:
+                    # Update Transaction status to BLOCKED & Risk Score 1.0
+                    new_txn.status = "BLOCKED"
+                    new_txn.risk_score = 1.0
+                    new_txn.risk_level = "VERY_HIGH"
+                    new_txn.action_taken = "BLOCK"
+                    db.commit()
                 
                 return self._create_blocked_response(
                     transaction_id=transaction_id,
@@ -99,8 +109,9 @@ class RiskOrchestrator:
                     txn_data=txn_data,
                     context=context,
                     db=db,
-                    user_id=user_orm.id, # Pass int PK
-                    txn_pk=new_txn.id # Pass int PK
+                    user_id=user_orm.id,
+                    txn_pk=new_txn.id if new_txn else None,
+                    save=save
                 )
             
             logger.info(f"✓ Rules score: {rule_result.rule_score:.2f} - Flags: {rule_result.flags}")
@@ -133,14 +144,14 @@ class RiskOrchestrator:
             )
             logger.info(f"✓ Action: {action_result.action} ({action_result.risk_level})")
             
-            # Update Transaction with results
-            new_txn.risk_score = final_score
-            new_txn.risk_level = action_result.risk_level
-            new_txn.ml_score = ml_result.ml_score
-            new_txn.rule_score = rule_result.rule_score
-            new_txn.action_taken = action_result.action
-            # status remains PENDING until confirmed
-            db.commit()
+            # Update Transaction with results only if saving
+            if save and new_txn:
+                new_txn.risk_score = final_score
+                new_txn.risk_level = action_result.risk_level
+                new_txn.ml_score = ml_result.ml_score
+                new_txn.rule_score = rule_result.rule_score
+                new_txn.action_taken = action_result.action
+                db.commit()
 
             # ──────────────────────────────────────────────
             # STEP 6: BUILD RESPONSE
@@ -156,18 +167,19 @@ class RiskOrchestrator:
             )
             
             # ──────────────────────────────────────────────
-            # STEP 7: LOG RISK EVENT
+            # STEP 7: LOG RISK EVENT (Only if saving)
             # ──────────────────────────────────────────────
-            self._log_risk_event(
-                user_id=user_orm.id, # Pass int PK
-                transaction_id=new_txn.id, # Pass int PK
-                txn_data=txn_data,
-                final_score=final_score,
-                action=action_result.action,
-                rule_result=rule_result,
-                ml_result=ml_result,
-                db=db
-            )
+            if save:
+                self._log_risk_event(
+                    user_id=user_orm.id,
+                    transaction_id=new_txn.id if new_txn else None,
+                    txn_data=txn_data,
+                    final_score=final_score,
+                    action=action_result.action,
+                    rule_result=rule_result,
+                    ml_result=ml_result,
+                    db=db
+                )
             
             logger.info(f"✓ Risk analysis complete: {action_result.action}")
             return response
@@ -185,99 +197,55 @@ class RiskOrchestrator:
         txn_data: Dict
     ) -> float:
         """
-        Combine scores using the MASTER PROMPT LOGIC.
-        
-        Formula: FinalScore = Clamp(RiskSignals - TrustSignals, 0.0, 1.0)
-        
-        Risk Signals:
-        - First-time receiver:            +0.30
-        - Suspicious Keywords:            +0.30
-        - Amount > 25,000:                +0.30 (Hierarchical)
-        - Amount > 10x Avg:               +0.25 (Hierarchical, if not >25k)
-        - Amount > 5x Avg:                +0.15 (Hierarchical, if not >10x)
-        - New Device:                     +0.15
-        - Night Time (10PM-6AM):          +0.15
-        - ML High Risk (>0.8):            +0.15
-        
-        Trust Signals:
-        - Previous Successful Txn:        -0.20
-        - Good Receiver Reputation:       -0.15
-        - Gold Tier User:                 -0.10
+        STRICT FINTECH SCORING LOGIC.
         """
         score = 0.0
-        amount = txn_data.get("amount", 0.0)
-        receiver = txn_data.get("receiver", "")
+        
+        # 1. Receiver History Analysis (STRICT LOGIC)
+        receiver_history = context.receiver_info
+        is_new = receiver_history.get("is_new", True)
+        is_good = receiver_history.get("good_history", False)
+        is_risky = receiver_history.get("risky_history", False)
+        
+        # 2. Add Base Signals
+        # Amount Risk
+        amount = float(txn_data.get("amount", 0.0))
         avg_amount = context.txn_stats.get("avg_amount_30d", 1000.0)
-        if avg_amount == 0: avg_amount = 1000.0
-        
-        # ──────────────────────────────────────────────
-        # 1. RISK SIGNALS (ADDITIVE)
-        # ──────────────────────────────────────────────
-        
-        # Receiver Risk
-        is_new_receiver = context.receiver_info.get("is_new", True)
-        if is_new_receiver:
-            score += 0.20
-            # logger.info("Risk: First-time receiver (+0.30)")
-
-        # Suspicious Keywords (lottery, prize, etc.)
-        keywords = ["lottery", "prize", "kyc", "crypto", "refund", "win", "cashback"]
-        note = txn_data.get("note", "").lower()
-        if any(k in note for k in keywords) or "lottery" in receiver.lower():
-            score += 0.30
-            # logger.info("Risk: Suspicious keyword detected (+0.30)")
-
-        # Amount Risk (Hierarchical)
-        if amount > 2500000:  # 25,000 INR
-            score += 0.30
-            # logger.info("Risk: Amount > 25k (+0.30)")
-        elif amount > (avg_amount * 10):
-            score += 0.25
-            # logger.info("Risk: Extreme spike > 10x (+0.25)")
-        elif amount > (avg_amount * 5):
+        if avg_amount > 0 and amount > (avg_amount * 5):
             score += 0.15
-            # logger.info("Risk: Spike > 5x (+0.15)")
             
-        # Context Risk
-        # Night Time (10PM - 6AM)
-        hour = datetime.now().hour
-        if hour >= 22 or hour < 6:
-            score += 0.15
-            # logger.info("Risk: Night transaction (+0.15)")
-            
-        # Device Risk
+        # Contextual Signals
         if "DEVICE_CHANGE" in flags:
             score += 0.15
-            # logger.info("Risk: New device (+0.15)")
-            
-        # ML Signal
-        if ml_score > 0.8:
-            score += 0.15
-            # logger.info("Risk: ML Model High Probability (+0.15)")
+        
+        # ML and Rule influences (scaled)
+        score += (ml_score * 0.15)
+        score += (rule_score * 0.10)
+        
+        # Suspicious Keywords
+        keywords = ["lottery", "prize", "kyc", "crypto", "refund", "win", "cashback"]
+        note = txn_data.get("note", "").lower()
+        if any(k in note for k in keywords):
+            score += 0.30
 
-        # ──────────────────────────────────────────────
-        # 2. TRUST SIGNALS (SUBTRACTIVE)
-        # ──────────────────────────────────────────────
+        # 3. APPLY HISTORY WEIGHTS LAST (THE OVERRIDE LOGIC)
+        # Case 1: First-Time Receiver
+        if is_new:
+            score += 0.20
+            # If after addition total risk > 0.70, boost it to 0.95 + 0.01 (STRICT REQ)
+            if score > 0.70:
+                score = 0.96
         
-        if not is_new_receiver:
-            score -= 0.20
-            # logger.info("Trust: Previous successful transaction (-0.20)")
+        # Case 2: Good History
+        elif is_good:
+            score -= 0.05
             
-        if context.receiver_info.get("reputation_score", 0.5) < 0.2:
-            score -= 0.15
-            # logger.info("Trust: Good receiver reputation (-0.15)")
-            
-        if context.user_profile.get("risk_tier") == "GOLD":
-            score -= 0.10
-            # logger.info("Trust: Gold Tier User (-0.10)")
-            
-        # ──────────────────────────────────────────────
-        # 3. CLAMPING
-        # ──────────────────────────────────────────────
-        final = max(0.0, min(1.0, score))
-        # logger.info(f"Final Calculated Score: {final}")
-        
-        return final
+        # Case 3: Risky History
+        elif is_risky:
+            score += 0.25
+
+        # Clamping
+        return max(0.0, min(1.0, score))
     
     def _build_response(
         self,
@@ -398,21 +366,23 @@ class RiskOrchestrator:
         context,
         db: Session,
         user_id: int,
-        txn_pk: int
+        txn_pk: Optional[int] = None,
+        save: bool = False
     ) -> Dict:
         """Create response for hard-blocked transactions."""
         
-        # Log the block
-        self._log_risk_event(
-            user_id=user_id,
-            transaction_id=txn_pk,
-            txn_data=txn_data,
-            final_score=1.0,
-            action="BLOCK",
-            rule_result=None,
-            ml_result=None,
-            db=db
-        )
+        # Log the block only if saving
+        if save and txn_pk:
+            self._log_risk_event(
+                user_id=user_id,
+                transaction_id=txn_pk,
+                txn_data=txn_data,
+                final_score=1.0,
+                action="BLOCK",
+                rule_result=None,
+                ml_result=None,
+                db=db
+            )
         
         return {
             "transaction_id": transaction_id,
@@ -586,9 +556,8 @@ class RiskOrchestrator:
             logger.error(f"Failed to log risk event: {e}")
             db.rollback()
     
-    def _generate_transaction_id(self) -> str:
-        """Generate unique transaction ID."""
-        return f"TXN-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+    
+    
 
 
 # Global orchestrator instance

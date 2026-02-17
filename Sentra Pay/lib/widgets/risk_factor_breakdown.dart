@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import '../theme/app_theme.dart';
 
 class RiskFactorBreakdown extends StatefulWidget {
@@ -53,8 +52,12 @@ class _RiskFactorBreakdownState extends State<RiskFactorBreakdown>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? AppTheme.darkCardColor : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : const Color(0xFF0F172A);
-    final secondaryColor = isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B);
+    final textColor = isDark
+        ? AppTheme.darkTextPrimary
+        : const Color(0xFF0F172A);
+    final secondaryColor = isDark
+        ? AppTheme.darkTextSecondary
+        : const Color(0xFF64748B);
 
     return AnimatedBuilder(
       animation: _animation,
@@ -65,7 +68,9 @@ class _RiskFactorBreakdownState extends State<RiskFactorBreakdown>
             color: cardColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isDark ? AppTheme.darkBorderColor : const Color(0xFFE5E7EB),
+              color: isDark
+                  ? AppTheme.darkBorderColor
+                  : const Color(0xFFE5E7EB),
             ),
             boxShadow: [
               BoxShadow(
@@ -80,7 +85,11 @@ class _RiskFactorBreakdownState extends State<RiskFactorBreakdown>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.analytics_outlined, size: 20, color: Color(0xFF2563EB)),
+                  const Icon(
+                    Icons.analytics_outlined,
+                    size: 20,
+                    color: Color(0xFF2563EB),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     "RISK BREAKDOWN",
@@ -121,11 +130,16 @@ class _RiskFactorBreakdownState extends State<RiskFactorBreakdown>
     );
   }
 
-  Widget _buildFactorBar(String label, double score, double animationValue, Color textColor) {
+  Widget _buildFactorBar(
+    String label,
+    double score,
+    double animationValue,
+    Color textColor,
+  ) {
     // Determine risk level text and color
     String riskText;
     Color color;
-    
+
     if (score < 0.35) {
       riskText = "Low Risk";
       color = const Color(0xFF10B981);

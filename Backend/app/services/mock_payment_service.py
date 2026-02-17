@@ -75,7 +75,7 @@ class MockPaymentService:
             logger.info(f"✅ Payment successful: {txn_id} via {psp}")
             
             return {
-                "status": "success",
+                "status": "COMPLETED",
                 "transaction_id": txn_id,
                 "amount": amount,
                 "receiver_upi": receiver_upi,
@@ -109,9 +109,9 @@ class MockPaymentService:
         
         # Simulate status check
         # In real app, this would query the database
-        statuses = ["success", "pending", "failed"]
+        statuses = ["COMPLETED", "PENDING", "FAILED"]
         # weights = [0.7, 0.2, 0.1] 
-        status = "success" # Force success for demo
+        status = "COMPLETED" # Force success for demo
         
         return {
             "transaction_id": transaction_id,

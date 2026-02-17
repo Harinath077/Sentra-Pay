@@ -30,15 +30,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.token ?? "demo-token";
       final backendData = await ApiService.getTransactionHistory(token);
-      
+
       if (backendData.isNotEmpty) {
-        final List<Map<String, dynamic>> analyticsData = backendData.map((data) => {
-          'recipient': data['receiver'] ?? 'Unknown',
-          'amount': (data['amount'] ?? 0).toDouble(),
-          'risk': (data['risk_level'] ?? 'LOW').toString().toLowerCase(),
-          'timestamp': _parseTimestamp(data['timestamp']),
-        }).toList();
-        
+        final List<Map<String, dynamic>> analyticsData = backendData
+            .map(
+              (data) => {
+                'recipient': data['receiver'] ?? 'Unknown',
+                'amount': (data['amount'] ?? 0).toDouble(),
+                'risk': (data['risk_level'] ?? 'LOW').toString().toLowerCase(),
+                'timestamp': _parseTimestamp(data['timestamp']),
+              },
+            )
+            .toList();
+
         FraudStore.syncHistory(analyticsData);
       }
     } catch (e) {
@@ -60,9 +64,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark
+          ? const Color(0xFF0F172A)
+          : const Color(0xFFF8FAFC),
       body: _isLoading ? _buildLoadingShimmer(isDark) : _buildContent(isDark),
     );
   }
@@ -73,11 +79,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
       child: ListView(
         padding: const EdgeInsets.all(20),
-        children: List.generate(5, (_) => Container(
-          height: 150,
-          margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-        )),
+        children: List.generate(
+          5,
+          (_) => Container(
+            height: 150,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -85,7 +97,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildContent(bool isDark) {
     final transactions = FraudStore.transactionHistory;
     final stats = _calculatePeriodData(transactions);
-    
+
     return RefreshIndicator(
       onRefresh: _fetchData,
       child: CustomScrollView(
@@ -95,7 +107,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             elevation: 0,
             scrolledUnderElevation: 1,
             backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-            title: const Text("Fraud Analytics", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+            title: const Text(
+              "Fraud Analytics",
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+            ),
           ),
           SliverPadding(
             padding: const EdgeInsets.all(20),
@@ -135,7 +150,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSelected ? (isDark ? const Color(0xFF3B82F6) : Colors.white) : Colors.transparent,
+                  color: isSelected
+                      ? (isDark ? const Color(0xFF3B82F6) : Colors.white)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -144,7 +161,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.grey,
+                    color: isSelected
+                        ? (isDark ? Colors.white : Colors.black)
+                        : Colors.grey,
                   ),
                 ),
               ),
@@ -160,11 +179,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _buildStatCard("Fraud Blocked", stats['blocked'].toString(), AppTheme.errorColor, isDark),
+          _buildStatCard(
+            "Fraud Blocked",
+            stats['blocked'].toString(),
+            AppTheme.errorColor,
+            isDark,
+          ),
           const SizedBox(width: 16),
-          _buildStatCard("Protected", "₹${_formatAmount(stats['protected'])}", AppTheme.successColor, isDark),
+          _buildStatCard(
+            "Protected",
+            "₹${_formatAmount(stats['protected'])}",
+            AppTheme.successColor,
+            isDark,
+          ),
           const SizedBox(width: 16),
-          _buildStatCard("TXNs Scanned", stats['total'].toString(), AppTheme.primaryColor, isDark),
+          _buildStatCard(
+            "TXNs Scanned",
+            stats['total'].toString(),
+            AppTheme.primaryColor,
+            isDark,
+          ),
         ],
       ),
     );
@@ -177,19 +211,34 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.grey,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           Container(
             height: 4,
             width: 40,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ],
       ),
@@ -198,18 +247,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   Widget _buildRiskDistribution(Map<String, dynamic> stats, bool isDark) {
     final medPct = (stats['med_pct'] ?? 0.0) * 100;
-    
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Risk Distribution", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const Text(
+            "Risk Distribution",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 20),
           Row(
             children: [
@@ -221,9 +275,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     sectionsSpace: 2,
                     centerSpaceRadius: 40,
                     sections: [
-                      PieChartSectionData(color: AppTheme.successColor, value: (stats['low_pct'] ?? 0.1) * 100, radius: 15, title: ''),
-                      PieChartSectionData(color: AppTheme.warningColor, value: (stats['med_pct'] ?? 0.1) * 100, radius: 15, title: ''),
-                      PieChartSectionData(color: AppTheme.errorColor, value: (stats['high_pct'] ?? 0.1) * 100, radius: 15, title: ''),
+                      PieChartSectionData(
+                        color: AppTheme.successColor,
+                        value: (stats['low_pct'] ?? 0.1) * 100,
+                        radius: 15,
+                        title: '',
+                      ),
+                      PieChartSectionData(
+                        color: AppTheme.warningColor,
+                        value: (stats['med_pct'] ?? 0.1) * 100,
+                        radius: 15,
+                        title: '',
+                      ),
+                      PieChartSectionData(
+                        color: AppTheme.errorColor,
+                        value: (stats['high_pct'] ?? 0.1) * 100,
+                        radius: 15,
+                        title: '',
+                      ),
                     ],
                   ),
                 ),
@@ -250,9 +319,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
         ],
       ),
     );
@@ -269,7 +345,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Fraud Trends", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const Text(
+            "Fraud Trends",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 20),
           Expanded(
             child: LineChart(
@@ -279,7 +358,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: const [FlSpot(0, 3), FlSpot(1, 1), FlSpot(2, 4), FlSpot(3, 2), FlSpot(4, 5)],
+                    spots: const [
+                      FlSpot(0, 3),
+                      FlSpot(1, 1),
+                      FlSpot(2, 4),
+                      FlSpot(3, 2),
+                      FlSpot(4, 5),
+                    ],
                     isCurved: true,
                     color: AppTheme.primaryColor,
                     barWidth: 3,
@@ -303,15 +388,35 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       mainAxisSpacing: 16,
       childAspectRatio: 1.2,
       children: [
-        _buildIndicatorCard("Suspicious VPA", Icons.person_off, AppTheme.errorColor, isDark),
-        _buildIndicatorCard("Amount Spike", Icons.trending_up, AppTheme.warningColor, isDark),
-        _buildIndicatorCard("New Device", Icons.smartphone, AppTheme.primaryColor, isDark),
+        _buildIndicatorCard(
+          "Suspicious VPA",
+          Icons.person_off,
+          AppTheme.errorColor,
+          isDark,
+        ),
+        _buildIndicatorCard(
+          "Amount Spike",
+          Icons.trending_up,
+          AppTheme.warningColor,
+          isDark,
+        ),
+        _buildIndicatorCard(
+          "New Device",
+          Icons.smartphone,
+          AppTheme.primaryColor,
+          isDark,
+        ),
         _buildIndicatorCard("Velocity", Icons.speed, Colors.purple, isDark),
       ],
     );
   }
 
-  Widget _buildIndicatorCard(String title, IconData icon, Color color, bool isDark) {
+  Widget _buildIndicatorCard(
+    String title,
+    IconData icon,
+    Color color,
+    bool isDark,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -323,7 +428,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         children: [
           Icon(icon, color: color, size: 30),
           const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
@@ -335,25 +443,42 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return amount.toStringAsFixed(0);
   }
 
-  Map<String, dynamic> _calculatePeriodData(List<Map<String, dynamic>> transactions) {
+  Map<String, dynamic> _calculatePeriodData(
+    List<Map<String, dynamic>> transactions,
+  ) {
     final now = DateTime.now();
-    int days = _selectedPeriod == 'Week' ? 7 : (_selectedPeriod == 'Month' ? 30 : 365);
+    int days = _selectedPeriod == 'Week'
+        ? 7
+        : (_selectedPeriod == 'Month' ? 30 : 365);
     final periodStart = now.subtract(Duration(days: days));
-    
+
     final periodTransactions = transactions.where((t) {
       final ts = t['timestamp'] as DateTime?;
       return ts != null && ts.isAfter(periodStart);
     }).toList();
-    
-    final blocked = periodTransactions.where((t) => ['high', 'very_high'].contains(t['risk']?.toString().toLowerCase())).toList();
-    final protectedAmount = blocked.fold(0.0, (sum, t) => sum + (t['amount'] as double));
-    
+
+    final blocked = periodTransactions
+        .where(
+          (t) => [
+            'high',
+            'very_high',
+          ].contains(t['risk']?.toString().toLowerCase()),
+        )
+        .toList();
+    final protectedAmount = blocked.fold(
+      0.0,
+      (sum, t) => sum + (t['amount'] as double),
+    );
+
     int lowCount = 0, medCount = 0, highCount = 0;
     for (var t in periodTransactions) {
       final risk = t['risk']?.toString().toLowerCase() ?? '';
-      if (risk == 'low') lowCount++;
-      else if (['medium', 'moderate', 'amber'].contains(risk)) medCount++;
-      else if (['high', 'very_high'].contains(risk)) highCount++;
+      if (risk == 'low') {
+        lowCount++;
+      } else if (['medium', 'moderate', 'amber'].contains(risk))
+        medCount++;
+      else if (['high', 'very_high'].contains(risk))
+        highCount++;
     }
 
     final total = periodTransactions.length;

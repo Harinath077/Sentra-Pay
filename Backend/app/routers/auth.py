@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import logging
 
-from app.models.auth import SignupRequest, LoginRequest, AuthResponse
-from app.services.auth_service import create_user, authenticate_user, generate_auth_response
+from app.models.auth import SignupRequest, LoginRequest, AuthResponse, GoogleLoginRequest
+from app.services.auth_service import create_user, authenticate_user, authenticate_google_user, generate_auth_response
 from app.database.connection import get_db
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,23 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     logger.info(f"User login successful: {user.user_id}")
     return auth_response
 
+
+@router.post("/google-login", response_model=AuthResponse)
+async def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db)):
+    """
+    Authenticate user via Google ID Token.
+    """
+    logger.info("Google login request received")
+    
+    # Authenticate via Google
+    user = await authenticate_google_user(db, request.id_token)
+    
+    # Generate auth response with token
+    auth_response = generate_auth_response(user)
+    
+    logger.info(f"Google login successful: {user.user_id}")
+    return auth_response
+    
 
 @router.get("/health")
 async def health_check():

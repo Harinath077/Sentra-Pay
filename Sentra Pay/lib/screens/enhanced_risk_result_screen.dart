@@ -31,7 +31,8 @@ class EnhancedRiskResultScreen extends StatefulWidget {
   });
 
   @override
-  State<EnhancedRiskResultScreen> createState() => _EnhancedRiskResultScreenState();
+  State<EnhancedRiskResultScreen> createState() =>
+      _EnhancedRiskResultScreenState();
 }
 
 class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
@@ -47,7 +48,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
   RiskCategory _riskCategory = RiskCategory.low;
   double _behaviorScore = 0.0;
   double _amountScore = 0.0;
-  double _receiverScore = 0.0;
+  final double _receiverScore = 0.0;
   bool _isLocalAnalysis = false;
 
   @override
@@ -68,14 +69,18 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
 
   void _checkRisk() {
     RiskAnalysisResult result;
-    
+
     if (widget.riskResult != null) {
       result = widget.riskResult!;
       _isLocalAnalysis = false;
     } else {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final user = authProvider.currentUser;
-      result = FraudStore.analyzeRisk(widget.recipient, widget.amount, user: user);
+      result = FraudStore.analyzeRisk(
+        widget.recipient,
+        widget.amount,
+        user: user,
+      );
       _isLocalAnalysis = true;
     }
 
@@ -87,8 +92,6 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
       _behaviorScore = result.behaviorScore;
       _amountScore = result.amountScore;
     });
-
-
   }
 
   void _reportFraud() {
@@ -113,7 +116,9 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
         // Log successful transaction
         TransactionHistory.addTransaction(
           Transaction(
-            id: widget.transactionId ?? "TXN-${DateTime.now().millisecondsSinceEpoch}",
+            id:
+                widget.transactionId ??
+                "TXN-${DateTime.now().millisecondsSinceEpoch}",
             recipient: widget.recipient,
             amount: widget.amount,
             riskScore: _riskScore,
@@ -126,8 +131,8 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
         FraudStore.addTransaction(
           receiver: widget.recipient,
           amount: widget.amount,
-          risk: _riskCategory == RiskCategory.high 
-              ? 'high' 
+          risk: _riskCategory == RiskCategory.high
+              ? 'high'
               : (_riskCategory == RiskCategory.medium ? 'medium' : 'low'),
           timestamp: DateTime.now(),
         );
@@ -166,7 +171,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
 
   Color _getRiskColor() {
     if (_isUserReported || !_isSafe) return AppTheme.errorColor;
-    
+
     // If backend provided a color, use it
     if (widget.riskResult?.color != null) {
       try {
@@ -184,7 +189,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
 
   String _getRiskTitle() {
     if (_isUserReported || !_isSafe) return "Fraud Detected";
-    
+
     // If backend provided a label, use it
     if (widget.riskResult?.label != null) {
       return widget.riskResult!.label!;
@@ -203,10 +208,16 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackgroundColor : const Color(0xFFF8FAFC);
+    final bgColor = isDark
+        ? AppTheme.darkBackgroundColor
+        : const Color(0xFFF8FAFC);
     final cardColor = isDark ? AppTheme.darkCardColor : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : const Color(0xFF0F172A);
-    final secondaryColor = isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B);
+    final textColor = isDark
+        ? AppTheme.darkTextPrimary
+        : const Color(0xFF0F172A);
+    final secondaryColor = isDark
+        ? AppTheme.darkTextSecondary
+        : const Color(0xFF64748B);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -214,13 +225,21 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: textColor),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 20,
+            color: textColor,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
         title: Text(
           "Risk Analysis",
-          style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
       ),
       body: FadeTransition(
@@ -262,30 +281,51 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Behavioral Profile Status
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: (_isLocalAnalysis ? Colors.blue : const Color(0xFF4F46E5)).withOpacity(0.05),
+                        color:
+                            (_isLocalAnalysis
+                                    ? Colors.blue
+                                    : const Color(0xFF4F46E5))
+                                .withOpacity(0.05),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: (_isLocalAnalysis ? Colors.blue : const Color(0xFF4F46E5)).withOpacity(0.1)),
+                        border: Border.all(
+                          color:
+                              (_isLocalAnalysis
+                                      ? Colors.blue
+                                      : const Color(0xFF4F46E5))
+                                  .withOpacity(0.1),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _isLocalAnalysis ? Icons.security_rounded : Icons.psychology_rounded, 
-                            size: 16, 
-                            color: _isLocalAnalysis ? Colors.blue : const Color(0xFF4F46E5)
+                            _isLocalAnalysis
+                                ? Icons.security_rounded
+                                : Icons.psychology_rounded,
+                            size: 16,
+                            color: _isLocalAnalysis
+                                ? Colors.blue
+                                : const Color(0xFF4F46E5),
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            _isLocalAnalysis ? "Secure Local Verification" : "AI Multi-Layer Analysis",
+                            _isLocalAnalysis
+                                ? "Secure Local Verification"
+                                : "AI Multi-Layer Analysis",
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: _isLocalAnalysis ? Colors.blue : const Color(0xFF4F46E5),
+                              color: _isLocalAnalysis
+                                  ? Colors.blue
+                                  : const Color(0xFF4F46E5),
                             ),
                           ),
                         ],
@@ -316,11 +356,15 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                         color: cardColor,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB),
+                          color: isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE5E7EB),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+                            color: Colors.black.withOpacity(
+                              isDark ? 0.3 : 0.04,
+                            ),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -347,10 +391,11 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                   Container(
                                     padding: const EdgeInsets.all(6),
                                     decoration: BoxDecoration(
-                                      color: (_isSafe
-                                              ? AppTheme.successColor
-                                              : AppTheme.errorColor)
-                                          .withOpacity(0.1),
+                                      color:
+                                          (_isSafe
+                                                  ? AppTheme.successColor
+                                                  : AppTheme.errorColor)
+                                              .withOpacity(0.1),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
@@ -465,7 +510,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                           onPressed: _reportFraud,
                         ),
                       ),
-                    
+
                     // High risk OR User Reported = BLOCKED
                     if (_riskCategory == RiskCategory.high || _isUserReported)
                       Container(
@@ -502,7 +547,9 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                               "Multiple risk factors detected. Please verify the recipient before attempting payment.",
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B),
+                                color: isDark
+                                    ? AppTheme.darkTextSecondary
+                                    : const Color(0xFF64748B),
                                 fontSize: 13,
                                 height: 1.5,
                               ),
@@ -510,8 +557,6 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                           ],
                         ),
                       )
-                    
-                    
                     // Low/Medium risk = Show button
                     else
                       Column(
@@ -526,7 +571,9 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                 color: const Color(0xFFFF9800).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: const Color(0xFFFF9800).withOpacity(0.3),
+                                  color: const Color(
+                                    0xFFFF9800,
+                                  ).withOpacity(0.3),
                                   width: 1.5,
                                 ),
                               ),
@@ -542,7 +589,9 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                     child: Text(
                                       "We suggest you verify the account before proceeding with this transaction.",
                                       style: TextStyle(
-                                        color: isDark ? AppTheme.darkTextPrimary : const Color(0xFF1F2937),
+                                        color: isDark
+                                            ? AppTheme.darkTextPrimary
+                                            : const Color(0xFF1F2937),
                                         fontSize: 13,
                                         fontWeight: FontWeight.w500,
                                         height: 1.4,
@@ -552,72 +601,96 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                 ],
                               ),
                             ),
-                          
+
                           // Payment button
                           CustomButton(
-                            text: _riskCategory == RiskCategory.low 
-                                ? "Pay Now" 
+                            text: _riskCategory == RiskCategory.low
+                                ? "Pay Now"
                                 : "Pay Anyway", // Medium risk
                             isPrimary: true,
-                            color: _riskCategory == RiskCategory.low 
+                            color: _riskCategory == RiskCategory.low
                                 ? null // Default green
-                                : const Color(0xFFFF9800), // Amber warning for medium
+                                : const Color(
+                                    0xFFFF9800,
+                                  ), // Amber warning for medium
                             onPressed: () async {
                               // Check if we have transaction ID from backend
                               if (widget.transactionId != null) {
                                 // Get auth token
-                                final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                                final token = authProvider.token ?? "demo-token";
-                                
-                                // Call payment confirmation API
+                                final authProvider = Provider.of<AuthProvider>(
+                                  context,
+                                  listen: false,
+                                );
+                                final token =
+                                    authProvider.token ?? "demo-token";
+
+                                // Call payment execution API (Now uses /execute)
                                 final result = await ApiService.confirmPayment(
                                   transactionId: widget.transactionId!,
                                   token: token,
+                                  amount: widget.amount,
+                                  receiver: widget.recipient,
                                   userAcknowledged: true,
                                 );
-                                
+
                                 if (result != null) {
                                   // Check if we're on mobile and have a UPI link
                                   final upiLink = result['upi_link'];
-                                  final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-                                  
-                                  if (isMobile && upiLink != null && upiLink.isNotEmpty) {
+                                  final isMobile =
+                                      !kIsWeb &&
+                                      (Platform.isAndroid || Platform.isIOS);
+
+                                  if (isMobile &&
+                                      upiLink != null &&
+                                      upiLink.isNotEmpty) {
                                     // MOBILE: Launch real UPI app
                                     print('🚀 Launching UPI app: $upiLink');
-                                    
+
                                     try {
                                       final uri = Uri.parse(upiLink);
                                       final canLaunch = await canLaunchUrl(uri);
-                                      
+
                                       if (canLaunch) {
                                         await launchUrl(
                                           uri,
                                           mode: LaunchMode.externalApplication,
                                         );
-                                        
+
                                         // Show message that user should complete payment in PSP app
                                         if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
                                             const SnackBar(
-                                              content: Text('Complete payment in your UPI app'),
+                                              content: Text(
+                                                'Complete payment in your UPI app',
+                                              ),
                                               duration: Duration(seconds: 3),
                                             ),
                                           );
                                         }
-                                        
+
                                         // In real app, you'd wait for callback from PSP app
                                         // For now, navigate to success screen after delay
-                                        await Future.delayed(const Duration(seconds: 3));
-                                        
-                                        if (result['status'] == 'success' && mounted) {
+                                        await Future.delayed(
+                                          const Duration(seconds: 3),
+                                        );
+
+                                        if (result['status'] == 'success' &&
+                                            mounted) {
                                           // Log successful transaction
                                           TransactionHistory.addTransaction(
                                             Transaction(
-                                              id: widget.transactionId ?? "TXN-${DateTime.now().millisecondsSinceEpoch}",
+                                              id:
+                                                  widget.transactionId ??
+                                                  "TXN-${DateTime.now().millisecondsSinceEpoch}",
                                               recipient: widget.recipient,
                                               amount: widget.amount,
                                               riskScore: _riskScore,
-                                              riskCategory: _riskCategory.toString().split('.').last,
+                                              riskCategory: _riskCategory
+                                                  .toString()
+                                                  .split('.')
+                                                  .last,
                                               timestamp: DateTime.now(),
                                               wasBlocked: false,
                                             ),
@@ -626,22 +699,30 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                           FraudStore.addTransaction(
                                             receiver: widget.recipient,
                                             amount: widget.amount,
-                                            risk: _riskCategory == RiskCategory.high 
-                                                ? 'high' 
-                                                : (_riskCategory == RiskCategory.medium ? 'medium' : 'low'),
+                                            risk:
+                                                _riskCategory ==
+                                                    RiskCategory.high
+                                                ? 'high'
+                                                : (_riskCategory ==
+                                                          RiskCategory.medium
+                                                      ? 'medium'
+                                                      : 'low'),
                                             timestamp: DateTime.now(),
                                           );
-                                          
+
                                           Navigator.pushReplacement(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (context) => PaymentSuccessScreen(
-                                                amount: widget.amount,
-                                                recipient: widget.recipient,
-                                                utrNumber: result['utr_number'],
-                                                pspName: result['psp_name'],
-                                                transactionId: widget.transactionId,
-                                              ),
+                                              builder: (context) =>
+                                                  PaymentSuccessScreen(
+                                                    amount: widget.amount,
+                                                    recipient: widget.recipient,
+                                                    utrNumber:
+                                                        result['utr_number'],
+                                                    pspName: result['psp_name'],
+                                                    transactionId:
+                                                        widget.transactionId,
+                                                  ),
                                             ),
                                           );
                                         }
@@ -656,7 +737,9 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                     }
                                   } else {
                                     // DESKTOP/WEB: Use simulated payment flow
-                                    print('💻 Desktop/Web mode - simulated payment');
+                                    print(
+                                      '💻 Desktop/Web mode - simulated payment',
+                                    );
                                     _handleSimulatedPayment(result);
                                   }
                                 } else {
@@ -664,7 +747,9 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Failed to process payment. Please try again.'),
+                                        content: Text(
+                                          'Failed to process payment. Please try again.',
+                                        ),
                                         backgroundColor: AppTheme.errorColor,
                                       ),
                                     );
@@ -672,6 +757,33 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                 }
                               } else {
                                 // Fallback: No transaction ID (local mode)
+                                // Save to local history even if backend is down
+                                TransactionHistory.addTransaction(
+                                  Transaction(
+                                    id: "LOC-TXN-${DateTime.now().millisecondsSinceEpoch}",
+                                    recipient: widget.recipient,
+                                    amount: widget.amount,
+                                    riskScore: _riskScore,
+                                    riskCategory: _riskCategory
+                                        .toString()
+                                        .split('.')
+                                        .last,
+                                    timestamp: DateTime.now(),
+                                    wasBlocked: false,
+                                  ),
+                                );
+
+                                FraudStore.addTransaction(
+                                  receiver: widget.recipient,
+                                  amount: widget.amount,
+                                  risk: _riskCategory == RiskCategory.high
+                                      ? 'high'
+                                      : (_riskCategory == RiskCategory.medium
+                                          ? 'medium'
+                                          : 'low'),
+                                  timestamp: DateTime.now(),
+                                );
+
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -685,10 +797,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                             },
                           ),
                         ],
-                      )
-                    
-                    
-
+                      ),
                   ],
                 ),
               ),

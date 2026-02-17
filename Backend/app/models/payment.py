@@ -165,7 +165,7 @@ class PaymentConfirmResponse(BaseModel):
     Response from payment confirmation.
     """
     transaction_id: str
-    status: str  # pending, success, failed, blocked, cancelled
+    status: str  # PENDING, COMPLETED, FAILED, BLOCKED, CANCELLED
     message: str
     timestamp: str
     amount: Optional[float] = None
@@ -181,7 +181,7 @@ class PaymentConfirmResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "transaction_id": "TXN20260210123456",
-                "status": "success",
+                "status": "COMPLETED",
                 "message": "Payment completed successfully",
                 "timestamp": "2026-02-10T10:35:00.000Z",
                 "amount": 5000.0,

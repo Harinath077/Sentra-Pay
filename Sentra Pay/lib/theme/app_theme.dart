@@ -3,18 +3,24 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // 🎯 Color System (Fintech Premium)
-  static const Color primaryColor = Color(0xFF2563EB); // Soft Royal Blue (Trust)
-  static const Color accentColor = Color(0xFF3B82F6); // Lighter Blue for accents
+  static const Color primaryColor = Color(
+    0xFF2563EB,
+  ); // Soft Royal Blue (Trust)
+  static const Color accentColor = Color(
+    0xFF3B82F6,
+  ); // Lighter Blue for accents
   static const Color backgroundColor = Color(0xFFF8FAFC); // Clean Slate
   static const Color cardSurfaceColor = Color(0xFFFFFFFF); // Pure White
-  
-  static const Color borderColor = Color(0xFFE5E7EB); // Light Gray for subtle borders
-  
+
+  static const Color borderColor = Color(
+    0xFFE5E7EB,
+  ); // Light Gray for subtle borders
+
   // Status Colors
   static const Color successColor = Color(0xFF10B981); // Emerald Green
   static const Color warningColor = Color(0xFFF59E0B); // Amber
   static const Color errorColor = Color(0xFFEF4444); // Soft Red
-  
+
   // Text Colors
   static const Color textPrimary = Color(0xFF0F172A); // Slate 900
   static const Color textSecondary = Color(0xFF64748B); // Slate 500
@@ -30,7 +36,6 @@ class AppTheme {
         secondary: accentColor,
         surface: cardSurfaceColor,
         error: errorColor,
-        background: backgroundColor,
         onSurface: textPrimary,
       ),
       textTheme: GoogleFonts.interTextTheme().copyWith(
@@ -74,14 +79,20 @@ class AppTheme {
         filled: true,
         fillColor: cardSurfaceColor,
         hintStyle: const TextStyle(color: textPlaceholder),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: borderColor, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: borderColor, width: 1.5), // Slightly visible default border
+          borderSide: const BorderSide(
+            color: borderColor,
+            width: 1.5,
+          ), // Slightly visible default border
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -118,7 +129,7 @@ class AppTheme {
           TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
         },
       ),
-      // Glass/Card styling helpers could go here if extending ThemeData, 
+      // Glass/Card styling helpers could go here if extending ThemeData,
       // but we'll handle them in widgets.
     );
   }
@@ -141,51 +152,54 @@ class AppTheme {
         secondary: accentColor,
         surface: darkCardColor,
         error: errorColor,
-        background: darkBackgroundColor,
         onSurface: darkTextPrimary,
       ),
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
-        displayLarge: const TextStyle(
-          color: darkTextPrimary,
-          fontWeight: FontWeight.bold,
-          fontSize: 36,
-          letterSpacing: -1.0,
-          height: 1.1,
-        ),
-        headlineMedium: const TextStyle(
-          color: darkTextPrimary,
-          fontWeight: FontWeight.w600,
-          fontSize: 24,
-          letterSpacing: -0.5,
-        ),
-        titleMedium: const TextStyle(
-          color: darkTextPrimary,
-          fontWeight: FontWeight.w600,
-          fontSize: 18,
-          letterSpacing: 0.1,
-        ),
-        bodyLarge: const TextStyle(
-          color: darkTextPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w400,
-        ),
-        bodyMedium: const TextStyle(
-          color: darkTextSecondary,
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
-        ),
-        labelLarge: const TextStyle(
-          color: darkTextPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
-      ),
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme)
+          .copyWith(
+            displayLarge: const TextStyle(
+              color: darkTextPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 36,
+              letterSpacing: -1.0,
+              height: 1.1,
+            ),
+            headlineMedium: const TextStyle(
+              color: darkTextPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 24,
+              letterSpacing: -0.5,
+            ),
+            titleMedium: const TextStyle(
+              color: darkTextPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 18,
+              letterSpacing: 0.1,
+            ),
+            bodyLarge: const TextStyle(
+              color: darkTextPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+            bodyMedium: const TextStyle(
+              color: darkTextSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+            ),
+            labelLarge: const TextStyle(
+              color: darkTextPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: darkCardColor,
         hintStyle: const TextStyle(color: darkTextSecondary),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: darkBorderColor, width: 1),

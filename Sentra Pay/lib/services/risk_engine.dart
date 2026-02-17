@@ -9,8 +9,8 @@ class RiskEngine {
   static const double _moderateAmountThreshold = 2000.0;
   static const double _unusualHourStart = 22; // 10 PM
   static const double _unusualHourEnd = 6; // 6 AM
-  static const int _newUserThreshold = 5; // transactions
-  
+
+
   /// Main risk analysis method
   static RiskData analyze({
     required double amount,
@@ -69,15 +69,15 @@ class RiskEngine {
 
     // Build explanations (top issues first)
     List<String> explanations = [];
-    
+
     // Sort risk factors by severity
     riskFactors.sort((a, b) => b.severity.compareTo(a.severity));
-    
+
     // Add top 3 risk factors
     for (var factor in riskFactors.take(3)) {
       explanations.add('${factor.icon} ${factor.message}');
     }
-    
+
     // Add safety confirmations if low risk
     if (score < 0.4 && safetyFactors.isNotEmpty) {
       for (var factor in safetyFactors.take(2)) {
@@ -94,11 +94,7 @@ class RiskEngine {
       }
     }
 
-    return RiskData(
-      score: score,
-      status: status,
-      explanations: explanations,
-    );
+    return RiskData(score: score, status: status, explanations: explanations);
   }
 
   // Amount Analysis
@@ -110,7 +106,7 @@ class RiskEngine {
     // Calculate user's average transaction (if available)
     // Using default with adjustment based on transaction count for now
     double avgAmount = 1500.0; // default for new users
-    
+
     // If user has transaction history, we can estimate average is slightly higher
     if (profile != null && profile.transactionCount > 10) {
       avgAmount = 2000.0; // Established users likely have higher average
@@ -119,40 +115,48 @@ class RiskEngine {
     // High amount checks
     if (amount > _highAmountThreshold) {
       score += 0.30;
-      risks.add(RiskFactor(
-        message: 'High transaction amount (₹${amount.toStringAsFixed(0)})',
-        severity: amount > 10000 ? 3 : 2,
-        icon: '🔴',
-      ));
+      risks.add(
+        RiskFactor(
+          message: 'High transaction amount (₹${amount.toStringAsFixed(0)})',
+          severity: amount > 10000 ? 3 : 2,
+          icon: '🔴',
+        ),
+      );
     } else if (amount > _moderateAmountThreshold) {
       score += 0.15;
-      risks.add(RiskFactor(
-        message: 'Moderate amount - verify recipient',
-        severity: 1,
-        icon: '🟡',
-      ));
+      risks.add(
+        RiskFactor(
+          message: 'Moderate amount - verify recipient',
+          severity: 1,
+          icon: '🟡',
+        ),
+      );
     } else {
-      safeties.add(SafetyFactor(
-        message: 'Standard transaction amount',
-        icon: '🟢',
-      ));
+      safeties.add(
+        SafetyFactor(message: 'Standard transaction amount', icon: '🟢'),
+      );
     }
 
     // Spike detection (amount vs average)
     if (profile != null && amount > (avgAmount * 5)) {
       score += 0.25;
-      risks.add(RiskFactor(
-        message: 'Unusual spike - ${(amount / avgAmount).toStringAsFixed(1)}x your average',
-        severity: 3,
-        icon: '🔴',
-      ));
+      risks.add(
+        RiskFactor(
+          message:
+              'Unusual spike - ${(amount / avgAmount).toStringAsFixed(1)}x your average',
+          severity: 3,
+          icon: '🔴',
+        ),
+      );
     } else if (profile != null && amount > (avgAmount * 2.5)) {
       score += 0.10;
-      risks.add(RiskFactor(
-        message: 'Higher than usual for your pattern',
-        severity: 1,
-        icon: '🟡',
-      ));
+      risks.add(
+        RiskFactor(
+          message: 'Higher than usual for your pattern',
+          severity: 1,
+          icon: '🟡',
+        ),
+      );
     }
 
     return _AmountRiskResult(score, risks, safeties);
@@ -178,28 +182,34 @@ class RiskEngine {
     if (hasPreviousTransaction) {
       // Reduce risk, but don't eliminate it
       score -= 0.2;
-      safeties.add(SafetyFactor(
-        message: 'Previous successful transaction with this receiver',
-        icon: '🟢',
-      ));
+      safeties.add(
+        SafetyFactor(
+          message: 'Previous successful transaction with this receiver',
+          icon: '🟢',
+        ),
+      );
     } else {
       // First time = add risk
       score += 0.3;
-      risks.add(RiskFactor(
-        message: 'First-time receiver - verify before paying',
-        severity: 2,
-        icon: '🔴',
-      ));
+      risks.add(
+        RiskFactor(
+          message: 'First-time receiver - verify before paying',
+          severity: 2,
+          icon: '🔴',
+        ),
+      );
     }
 
     // Check for suspicious patterns in UPI ID (ALWAYS check, even for known receivers)
     if (_isSuspiciousUPI(receiverId)) {
       score += 0.3;
-      risks.add(RiskFactor(
-        message: 'Receiver ID shows suspicious pattern',
-        severity: 3,
-        icon: '🔴',
-      ));
+      risks.add(
+        RiskFactor(
+          message: 'Receiver ID shows suspicious pattern',
+          severity: 3,
+          icon: '🔴',
+        ),
+      );
     }
 
     return _ReceiverRiskResult(score, risks, safeties);
@@ -215,22 +225,25 @@ class RiskEngine {
 
     if (hour >= _unusualHourStart || hour < _unusualHourEnd) {
       score += 0.15;
-      risks.add(RiskFactor(
-        message: 'Transaction at unusual time (${hour}:${timestamp.minute.toString().padLeft(2, '0')})',
-        severity: 1,
-        icon: '🟡',
-      ));
+      risks.add(
+        RiskFactor(
+          message:
+              'Transaction at unusual time ($hour:${timestamp.minute.toString().padLeft(2, '0')})',
+          severity: 1,
+          icon: '🟡',
+        ),
+      );
     } else {
-      safeties.add(SafetyFactor(
-        message: 'Transaction during normal hours',
-        icon: '🟢',
-      ));
+      safeties.add(
+        SafetyFactor(message: 'Transaction during normal hours', icon: '🟢'),
+      );
     }
 
     // Weekend check (additional minor risk)
-    if (timestamp.weekday == DateTime.saturday || 
+    if (timestamp.weekday == DateTime.saturday ||
         timestamp.weekday == DateTime.sunday) {
-      if (score > 0.5) { // Only add if already risky
+      if (score > 0.5) {
+        // Only add if already risky
         score += 0.05;
       }
     }
@@ -249,42 +262,26 @@ class RiskEngine {
 
     if (profile == null) {
       score += 0.15;
-      risks.add(RiskFactor(
-        message: 'New user - limited transaction history',
-        severity: 1,
-        icon: '🟡',
-      ));
+      risks.add(
+        RiskFactor(
+          message: 'New user - limited transaction history',
+          severity: 1,
+          icon: '🟡',
+        ),
+      );
       return _BehaviorRiskResult(score, risks, safeties);
     }
 
-    // Check login count (new account risk)
-    if (profile.loginCount < _newUserThreshold) {
-      score += 0.20;
-      risks.add(RiskFactor(
-        message: 'New account - first few transactions',
-        severity: 2,
-        icon: '🔴',
-      ));
-    } else {
-      safeties.add(SafetyFactor(
-        message: 'Established user account',
-        icon: '🟢',
-      ));
-    }
+
 
     // Device check
     if (deviceId != null && deviceId != profile.deviceId) {
       score += 0.15;
-      risks.add(RiskFactor(
-        message: 'New device detected',
-        severity: 2,
-        icon: '🔴',
-      ));
+      risks.add(
+        RiskFactor(message: 'New device detected', severity: 2, icon: '🔴'),
+      );
     } else if (deviceId == profile.deviceId) {
-      safeties.add(SafetyFactor(
-        message: 'Known device',
-        icon: '🟢',
-      ));
+      safeties.add(SafetyFactor(message: 'Known device', icon: '🟢'));
     }
 
     return _BehaviorRiskResult(score, risks, safeties);

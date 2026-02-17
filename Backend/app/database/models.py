@@ -3,7 +3,7 @@ SQLAlchemy Database Models.
 Defines all database tables for the fraud detection system.
 """
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON, Text, Numeric, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON, Text, Numeric, UniqueConstraint, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database.connection import Base
@@ -19,8 +19,14 @@ class User(Base):
     user_id = Column(String(50), unique=True, nullable=False, index=True, default=lambda: f"USER-{uuid.uuid4().hex[:8].upper()}")
     email = Column(String(255), unique=True, nullable=False, index=True)
     phone = Column(String(20), unique=True, nullable=True)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True) # Nullable for Oauth users
     full_name = Column(String(255), nullable=False)
+    
+    # OAuth Fields
+    google_id = Column(String(255), unique=True, nullable=True)
+    login_method = Column(String(20), default="email") # email, google
+    is_verified = Column(Boolean, default=False)
+    auth_provider = Column(String(50), nullable=True) # For linking accounts
     
     # Trust & Risk Metrics
     trust_score = Column(Float, default=0.0)
@@ -63,7 +69,7 @@ class Transaction(Base):
     
     # Decision
     action_taken = Column(String(20), nullable=True)  # ALLOW, WARNING, OTP_REQUIRED, BLOCK
-    status = Column(String(20), default="pending")  # pending, success, failed, blocked, cancelled
+    status = Column(String(20), default="PENDING")  # PENDING, COMPLETED, FAILED, BLOCKED, CANCELLED
     
     # Payment Completion Details (populated after payment)
     payment_timestamp = Column(DateTime(timezone=True), nullable=True)  # When payment was completed
@@ -72,6 +78,10 @@ class Transaction(Base):
     
     # Payment Details
     payment_method = Column(String(255), nullable=True)
+    
+    # Blockchain Immutable Ledger
+    current_hash = Column(String(64), nullable=True, index=True)
+    previous_hash = Column(String(64), nullable=True)
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
