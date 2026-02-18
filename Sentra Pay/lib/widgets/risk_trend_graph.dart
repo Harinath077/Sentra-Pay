@@ -122,9 +122,9 @@ class _RiskTrendGraphState extends State<RiskTrendGraph>
             animation: _animation,
             builder: (context, child) {
               return SizedBox(
-                height: 120,
+                height: 180,
                 child: CustomPaint(
-                  size: const Size(double.infinity, 120),
+                  size: const Size(double.infinity, 180),
                   painter: _TrendGraphPainter(
                     scores: scores,
                     animationValue: _animation.value,
@@ -145,16 +145,57 @@ class _RiskTrendGraphState extends State<RiskTrendGraph>
               fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround, // Distribute evenly
+            children: [
+              _buildLegendItem(const Color(0xFF10B981), "Low Risk"),
+              _buildLegendItem(const Color(0xFFF59E0B), "Moderate Risk"),
+              _buildLegendItem(const Color(0xFFEF4444), "High Risk"),
+            ],
+          ),
         ],
       ),
     );
   }
 
+  Widget _buildLegendItem(Color color, String text) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white70
+                : Colors.black87,
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   double _calculateTrend(List<double> scores) {
     if (scores.length < 2) return 0;
-    final recent = scores.take(3).reduce((a, b) => a + b) / 3;
-    final older = scores.skip(math.max(0, scores.length - 3)).reduce((a, b) => a + b) / 3;
-    return recent - older;
+
+    // scores is [Oldest, ..., Newest] (Left to Right)
+    final olderSubset = scores.take(3);
+    final olderAvg = olderSubset.isEmpty ? 0.0 : olderSubset.reduce((a, b) => a + b) / olderSubset.length;
+
+    final recentSubset = scores.skip(math.max(0, scores.length - 3));
+    final recentAvg = recentSubset.isEmpty ? 0.0 : recentSubset.reduce((a, b) => a + b) / recentSubset.length;
+
+    return recentAvg - olderAvg;
   }
 }
 
@@ -192,7 +233,7 @@ class _TrendGraphPainter extends CustomPainter {
     final fillPath = Path();
 
     final maxScore = 100.0;
-    final stepX = size.width / (scores.length - 1);
+    final stepX = scores.length > 1 ? size.width / (scores.length - 1) : 0.0;
 
     for (int i = 0; i < scores.length; i++) {
       final x = i * stepX;
@@ -214,27 +255,47 @@ class _TrendGraphPainter extends CustomPainter {
     // Draw gradient fill
     canvas.drawPath(fillPath, gradientPaint);
 
-    // Draw line
-    paint.color = const Color(0xFF2563EB);
+    // Draw line with Risk Gradient (Green -> Amber -> Red)
+    final lineGradient = const LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [
+        Color(0xFF10B981), // Low Risk (Green)
+        Color(0xFFF59E0B), // Moderate Risk (Amber)
+        Color(0xFFEF4444), // High Risk (Red)
+      ],
+      stops: [0.3, 0.6, 0.9],
+    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    
+    paint.shader = lineGradient;
     canvas.drawPath(path, paint);
 
-    // Draw dots
+    // Draw dots colored by risk level
     for (int i = 0; i < scores.length; i++) {
       final x = i * stepX;
       final y = size.height - (scores[i] / maxScore * size.height);
+      
+      Color dotColor;
+      if (scores[i] < 35) {
+        dotColor = const Color(0xFF10B981);
+      } else if (scores[i] < 65) {
+        dotColor = const Color(0xFFF59E0B);
+      } else {
+        dotColor = const Color(0xFFEF4444);
+      }
 
       final dotPaint = Paint()
         ..color = isDark ? const Color(0xFF1E293B) : Colors.white
         ..style = PaintingStyle.fill;
 
-      canvas.drawCircle(Offset(x, y), 5, dotPaint);
+      canvas.drawCircle(Offset(x, y), 6, dotPaint);
 
       final borderPaint = Paint()
-        ..color = const Color(0xFF2563EB)
+        ..color = dotColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
+        ..strokeWidth = 3;
 
-      canvas.drawCircle(Offset(x, y), 5, borderPaint);
+      canvas.drawCircle(Offset(x, y), 6, borderPaint);
     }
   }
 

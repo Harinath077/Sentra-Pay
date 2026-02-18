@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_history.dart';
 import '../theme/app_theme.dart';
-import '../widgets/risk_trend_graph.dart';
+import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_provider.dart';
@@ -196,8 +196,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final textColor = isDark ? AppTheme.darkTextPrimary : const Color(0xFF0F172A);
     final secondaryColor = isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B);
 
-    // Use real data for risk trend
-    final riskTrend = _history.map((t) => t.riskScore).toList();
+
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -349,11 +348,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
             const SizedBox(height: 24),
 
-            // Risk Trend Graph
-            if (riskTrend.isNotEmpty) ...[
-              RiskTrendGraph(riskScores: riskTrend),
-              const SizedBox(height: 24),
-            ],
+
 
             // Transaction List Header
             Row(

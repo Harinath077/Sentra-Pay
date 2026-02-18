@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_theme.dart';
 import '../models/auth_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/risk_trend_graph.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -25,6 +26,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   int _mediumCount = 0;
   int _highCount = 0;
   double _moneyProtected = 0;
+  List<double> _riskScores = [];
   bool _isLoading = false;
 
   // Animated values
@@ -83,12 +85,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             safe++;
           }
         }
+        // Extract risk scores for graph (Limit to last 15 for readability, and reverse to show Old -> New)
+        final recentHistory = history.take(15).toList().reversed;
+        final riskScores = recentHistory.map((t) {
+          final score = (t['risk_score'] ?? 0).toDouble();
+          return score <= 1.0 ? score * 100 : score;
+        }).toList();
+        
         setState(() {
           _totalTransactions = history.length;
           _blockedCount = blocked;
           _safeCount = safe;
           _mediumCount = medium;
           _highCount = blocked;
+          _riskScores = riskScores;
           _accuracy =
               history.isEmpty ? 0 : ((safe / history.length) * 100);
           _moneyProtected = totalBlockedAmount;
@@ -213,8 +223,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   const SizedBox(height: 16),
                   _buildAnimatedSection(
                       2,
-                      _buildRiskBreakdownCard(
-                          isDark, cardColor, textColor, secondaryColor, borderColor)),
+                      RiskTrendGraph(riskScores: _riskScores)),
                   const SizedBox(height: 16),
                   _buildAnimatedSection(
                       3,
@@ -536,152 +545,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   // ─── Section 3: Risk Breakdown — fl_chart PieChart ───
-  int _touchedIndex = -1;
 
-  Widget _buildRiskBreakdownCard(bool isDark, Color cardColor, Color textColor,
-      Color secondaryColor, Color borderColor) {
-    final total = _safeCount + _mediumCount + _highCount;
-    final safePct = total > 0 ? (_safeCount / total * 100) : 85.0;
-    final medPct = total > 0 ? (_mediumCount / total * 100) : 10.0;
-    final highPct = total > 0 ? (_highCount / total * 100) : 5.0;
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.pie_chart_rounded,
-                  color: AppTheme.primaryColor, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Risk Breakdown',
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Transaction risk distribution',
-            style: TextStyle(
-              color: secondaryColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 200,
-            child: Row(
-              children: [
-                // Pie Chart
-                Expanded(
-                  flex: 3,
-                  child: PieChart(
-                    PieChartData(
-                      pieTouchData: PieTouchData(
-                        touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                          setState(() {
-                            if (!event.isInterestedForInteractions ||
-                                pieTouchResponse == null ||
-                                pieTouchResponse.touchedSection == null) {
-                              _touchedIndex = -1;
-                              return;
-                            }
-                            _touchedIndex = pieTouchResponse
-                                .touchedSection!.touchedSectionIndex;
-                          });
-                        },
-                      ),
-                      sectionsSpace: 3,
-                      centerSpaceRadius: 36,
-                      startDegreeOffset: -90,
-                      sections: [
-                        PieChartSectionData(
-                          color: AppTheme.successColor,
-                          value: safePct,
-                          title: '${safePct.toStringAsFixed(0)}%',
-                          radius: _touchedIndex == 0 ? 56 : 48,
-                          titleStyle: TextStyle(
-                            fontSize: _touchedIndex == 0 ? 14 : 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          titlePositionPercentageOffset: 0.55,
-                        ),
-                        PieChartSectionData(
-                          color: AppTheme.warningColor,
-                          value: medPct,
-                          title: '${medPct.toStringAsFixed(0)}%',
-                          radius: _touchedIndex == 1 ? 56 : 48,
-                          titleStyle: TextStyle(
-                            fontSize: _touchedIndex == 1 ? 14 : 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          titlePositionPercentageOffset: 0.55,
-                        ),
-                        PieChartSectionData(
-                          color: AppTheme.errorColor,
-                          value: highPct,
-                          title: '${highPct.toStringAsFixed(0)}%',
-                          radius: _touchedIndex == 2 ? 56 : 48,
-                          titleStyle: TextStyle(
-                            fontSize: _touchedIndex == 2 ? 14 : 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          titlePositionPercentageOffset: 0.55,
-                        ),
-                      ],
-                    ),
-                    swapAnimationDuration: const Duration(milliseconds: 800),
-                    swapAnimationCurve: Curves.easeOutCubic,
-                  ),
-                ),
-                const SizedBox(width: 20),
-                // Legend
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildChartLegendRow('Safe', _safeCount,
-                          AppTheme.successColor, textColor, secondaryColor),
-                      const SizedBox(height: 16),
-                      _buildChartLegendRow('Medium', _mediumCount,
-                          AppTheme.warningColor, textColor, secondaryColor),
-                      const SizedBox(height: 16),
-                      _buildChartLegendRow('High Risk', _highCount,
-                          AppTheme.errorColor, textColor, secondaryColor),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildChartLegendRow(String label, int count, Color color,
       Color textColor, Color secondaryColor) {
