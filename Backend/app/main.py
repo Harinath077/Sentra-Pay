@@ -111,16 +111,15 @@ app = FastAPI(
 # MIDDLEWARE
 # ──────────────────────────────────────────────
 
-# CORS Middleware
-    # CORS Middleware with Regex for dynamic localhost ports
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_origin_regex='https?://(localhost|127\.0\.0\.1)(:[0-9]+)?',
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# CORS Middleware with Regex for dynamic localhost ports
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex='https?://(localhost|127\.0\.0\.1)(:[0-9]+)?',
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Request timing middleware

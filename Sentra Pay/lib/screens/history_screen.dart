@@ -55,6 +55,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       print("Fetching history from: ${ApiService.baseUrl}");
       final backendData = await ApiService.getTransactionHistory(token);
       
+      List<Transaction> allTransactions = [];
+      
       if (backendData.isNotEmpty) {
         final List<Transaction> backendTransactions = backendData.map((data) {
           return Transaction(
@@ -77,41 +79,67 @@ class _HistoryScreenState extends State<HistoryScreen> {
         }).toList();
         FraudStore.syncHistory(analyticsData);
 
-        if (mounted) {
-          setState(() {
-            _history = backendTransactions;
-            _isLoading = false;
-            
-            if (_history.isNotEmpty) {
-               int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
-               _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
-            }
-            
-            _trustTier = TransactionHistory.getTrustTier();
-          });
+        allTransactions = backendTransactions;
+      }
+      
+      // Always merge with local transactions to ensure nothing is missed
+      final localHistory = TransactionHistory.getHistory();
+      
+      // Add local transactions that aren't in backend (based on ID)
+      final backendIds = allTransactions.map((t) => t.id).toSet();
+      for (var localTxn in localHistory) {
+        if (!backendIds.contains(localTxn.id)) {
+          allTransactions.add(localTxn);
         }
-      } else {
-        // Backend returned empty
-        if (mounted) {
-          setState(() {
-            _history = [];
-            _isLoading = false;
-            _trustScore = 50.0;
-            _trustTier = "Bronze";
-          });
-        }
+      }
+      
+      // Sort by timestamp (newest first)
+      allTransactions.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      
+      if (mounted) {
+        setState(() {
+          _history = allTransactions;
+          _isLoading = false;
+          
+          if (_history.isNotEmpty) {
+             int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
+             _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
+          } else {
+             _trustScore = 50.0;
+          }
+          
+          _trustTier = TransactionHistory.getTrustTier();
+        });
       }
     } catch (e) {
       print("Error fetching history: $e");
+      
+      // Fall back to local history when backend fails
+      final localHistory = TransactionHistory.getHistory();
+      
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _history = [];
+          _history = localHistory;
           
-          if (e.toString().contains("Connection refused") || e.toString().contains("Network is unreachable")) {
-             _errorMessage = "Could not connect to server.\nCheck your internet or backend.";
+          if (_history.isNotEmpty) {
+             int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
+             _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
           } else {
-             _errorMessage = "Failed to load history.\nWait a moment and try again.";
+             _trustScore = 50.0;
+          }
+          
+          _trustTier = TransactionHistory.getTrustTier();
+          
+          // Show warning that we're using local data
+          if (e.toString().contains("Connection refused") || e.toString().contains("Network is unreachable")) {
+             _errorMessage = localHistory.isNotEmpty 
+                 ? "Using local history (Backend offline)"
+                 : "Could not connect to server.\nCheck your internet or backend.";
+          } else {
+             _errorMessage = localHistory.isNotEmpty
+                 ? "Using local history (Backend error)"
+                 : "Failed to load history.\nWait a moment and try again.";
           }
         });
       }
@@ -232,14 +260,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                 ),
               )
-            : SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Trust Score Card
-            Container(
+            : RefreshIndicator(
+                onRefresh: _fetchHistory,
+                color: AppTheme.primaryColor,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Trust Score Card
+                      Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
@@ -393,6 +424,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 
