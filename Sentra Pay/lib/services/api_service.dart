@@ -150,12 +150,15 @@ class ApiService {
 
         if (data['risk_breakdown'] != null) {
           final bd = data['risk_breakdown'];
-          if (bd['behavior_analysis'] != null)
+          if (bd['behavior_analysis'] != null) {
             behaviorScore = (bd['behavior_analysis']['score'] ?? 50) / 100.0;
-          if (bd['amount_analysis'] != null)
+          }
+          if (bd['amount_analysis'] != null) {
             amountScore = (bd['amount_analysis']['score'] ?? 50) / 100.0;
-          if (bd['receiver_analysis'] != null)
+          }
+          if (bd['receiver_analysis'] != null) {
             receiverScore = (bd['receiver_analysis']['score'] ?? 50) / 100.0;
+          }
         }
 
         return RiskAnalysisResult(

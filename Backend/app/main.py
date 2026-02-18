@@ -14,7 +14,7 @@ from app.config import settings
 from app.database.connection import test_db_connection, engine
 from app.database.redis_client import redis_client
 from app.database import models
-from app.routers import auth, payment, receiver
+from app.routers import auth, payment, receiver, dashboard
 from app.core.ml_engine import load_model
 
 # Configure logging
@@ -111,17 +111,15 @@ app = FastAPI(
 # MIDDLEWARE
 # ──────────────────────────────────────────────
 
-# CORS Middleware
-    # CORS Middleware with Regex for dynamic localhost ports
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_origin_regex='https?://(localhost|127\.0\.0\.1)(:[0-9]+)?',
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
+# CORS Middleware with Regex for dynamic localhost ports
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex='https?://(localhost|127\.0\.0\.1)(:[0-9]+)?',
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Request timing middleware
 @app.middleware("http")
@@ -170,6 +168,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(auth.router)
 app.include_router(payment.router)
 app.include_router(receiver.router)
+app.include_router(dashboard.router)
+app.include_router(dashboard.dashboard_router)
 
 # TODO: Add user and transaction routers when implemented
 # app.include_router(user.router)

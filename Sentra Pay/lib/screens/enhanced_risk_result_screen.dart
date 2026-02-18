@@ -9,7 +9,6 @@ import '../models/fraud_store.dart';
 import '../models/transaction_history.dart';
 import '../models/auth_provider.dart';
 import 'package:provider/provider.dart';
-import 'dart:math' as math;
 import '../services/micro_tips.dart';
 import '../services/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -779,8 +778,8 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                                   risk: _riskCategory == RiskCategory.high
                                       ? 'high'
                                       : (_riskCategory == RiskCategory.medium
-                                          ? 'medium'
-                                          : 'low'),
+                                            ? 'medium'
+                                            : 'low'),
                                   timestamp: DateTime.now(),
                                 );
 
