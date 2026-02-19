@@ -9,7 +9,6 @@ import '../models/fraud_store.dart';
 import '../models/transaction_history.dart';
 import '../models/auth_provider.dart';
 import 'package:provider/provider.dart';
-import '../services/micro_tips.dart';
 import '../services/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io' show Platform;
@@ -427,52 +426,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
                       ),
                     ),
 
-                    // Micro-Tip Card
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            const Color(0xFF4F46E5).withOpacity(0.05),
-                            const Color(0xFF7C3AED).withOpacity(0.05),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFF4F46E5).withOpacity(0.1),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4F46E5).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.lightbulb_outline_rounded,
-                              color: Color(0xFF4F46E5),
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              MicroTips.getContextualTip(_riskScore),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: textColor,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+
 
                     const SizedBox(height: 24),
                   ],

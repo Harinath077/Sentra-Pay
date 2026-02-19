@@ -15,7 +15,7 @@ import '../widgets/security_analysis_loader.dart';
 import '../models/fraud_store.dart';
 import '../models/auth_provider.dart';
 import '../models/settings_provider.dart';
-import '../services/micro_tips.dart';
+
 import '../services/api_service.dart';
 import '../models/receiver_info.dart';
 import 'package:geolocator/geolocator.dart';
@@ -39,27 +39,13 @@ class _HomeScreenState extends State<HomeScreen> {
   // State for Payment Processing
   final bool _isProcessing = false;
 
-  // State for Micro-Tips
-  bool _showMicroTip = true;
-  String _currentTip = '';
+
 
   @override
   void initState() {
     super.initState();
-    // Get a random tip from MicroTips service
-    _currentTip = MicroTips.getRandomTip();
-
     // Polite Location Request (Non-blocking)
     _requestLocationPermission();
-
-    // Auto-hide micro-tip after 8 seconds
-    Future.delayed(const Duration(seconds: 8), () {
-      if (mounted) {
-        setState(() {
-          _showMicroTip = false;
-        });
-      }
-    });
   }
 
   Future<void> _requestLocationPermission() async {
@@ -249,28 +235,50 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(
                 fontFamily: 'Outfit',
                 fontWeight: FontWeight.w800,
-                fontSize: 22,
+                fontSize: 24, // Slightly larger size retained
                 letterSpacing: -0.5,
                 color: isDark ? Colors.white : const Color(0xFF0F172A),
               ),
             ),
-            const SizedBox(height: 4),
+            
+            const SizedBox(height: 8), // Increased spacing retained
+            
+            // 2. Subtitle with Glowing Shield
             Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(
-                  Icons.shield_moon_rounded,
-                  size: 12,
-                  color: AppTheme.successColor,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.successColor.withOpacity(0.5),
+                        blurRadius: 12, // Subtle glow
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.shield_moon_rounded,
+                    size: 14,
+                    color: AppTheme.successColor,
+                  ),
                 ),
-                SizedBox(width: 4),
+                const SizedBox(width: 8), // Increased spacing
                 Text(
                   "Secure UPI Payment",
                   style: TextStyle(
                     color: AppTheme.successColor,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                    letterSpacing: 0.8,
+                    shadows: [
+                      BoxShadow(
+                        color: AppTheme.successColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -312,71 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const SizedBox(height: 20),
 
-                  // Micro-Tip Widget
-                  if (_showMicroTip)
-                    AnimatedOpacity(
-                      opacity: _showMicroTip ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 300),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E40AF).withOpacity(0.1)
-                              : const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDark
-                                ? const Color(0xFF60A5FA).withOpacity(0.2)
-                                : const Color(0xFF10B981).withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.lightbulb_outline_rounded,
-                              size: 18,
-                              color: isDark
-                                  ? const Color(0xFF60A5FA)
-                                  : const Color(0xFF059669),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _currentTip,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDark
-                                      ? AppTheme.darkTextPrimary
-                                      : const Color(0xFF065F46),
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              icon: Icon(
-                                Icons.close,
-                                size: 16,
-                                color: isDark
-                                    ? AppTheme.darkTextSecondary
-                                    : const Color(0xFF059669).withOpacity(0.6),
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _showMicroTip = false;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+
 
                   // Professional Transaction Card
                   Container(
@@ -557,8 +501,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                       style: TextButton.styleFrom(
                                         foregroundColor: isDark
                                             ? const Color(
-                                                0xFF60A5FA,
-                                              ) // Lighter blue for dark mode
+                                                0xFF34D399,
+                                              ) // Lighter green for dark mode
                                             : AppTheme.primaryColor,
                                         textStyle: const TextStyle(
                                           fontWeight: FontWeight.w600,

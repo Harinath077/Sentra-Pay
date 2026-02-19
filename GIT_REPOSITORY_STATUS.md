@@ -257,6 +257,44 @@ git push origin master
 
 ---
 
+## 📊 ANALYTICS PAGE — UI REDESIGN (Feb 18, 2026)
+
+### 📁 Files Modified
+
+| # | File | What Changed |
+|---|------|--------------|
+| 1 | `Sentra Pay/lib/screens/analytics_screen.dart` | **Main file** — all the UI redesigns |
+| 2 | `Sentra Pay/lib/screens/home_screen.dart` | Removed the "Analysis" button from Quick Access row + removed unused import |
+
+### 🔧 Detailed Changes in `analytics_screen.dart`
+
+| Section | What was done |
+|---------|---------------|
+| **Hero Card (Money Protected)** | Removed blue gradient, decorative circles, shield icon, "Active" badge. Now uses clean card with top accent stripe, primary-colored amount, two stat boxes (Total Transactions, Threats Blocked) |
+| **Risk Breakdown** | Replaced custom `_DonutChartPainter` with `fl_chart` **PieChart** — interactive slices, touch highlighting, percentage labels, color-coded legend |
+| **Risk Factors** | Replaced progress bars with `fl_chart` **BarChart** — vertical bars, tooltips on touch, labeled axes, color-coded by risk level |
+| **Behavioral Insights** | Removed AI-template look (colored left borders, tinted backgrounds, "⚡ AI" badge). Now uses clean rows with status dot, label/value hierarchy, status pills, subtle dividers |
+| **Loading** | Removed full-page spinner. Page renders instantly, data populates when API responds |
+| **Animations** | Cut from 1800ms → 900ms stagger, 600ms number count-up. Feels instant |
+| **Data** | Fixed fake ₹3.2K always showing. Now sums actual blocked amounts from backend. Removed fake fallback data on error |
+| **Cleanup** | Removed unused `_DonutSegment`, `_DonutChartPainter` classes. Changed `_RiskFactor.value` from `double` to `int` |
+| **fl_chart fix** | Fixed `duration`/`curve` → `swapAnimationDuration`/`swapAnimationCurve` for fl_chart v0.68 compatibility |
+
+### 🔧 Changes in `home_screen.dart`
+
+| What | Details |
+|------|---------|
+| Removed import | `import 'analysis_bottom_sheet.dart'` |
+| Removed button | The "Analysis" quick access button from the home screen row |
+
+### 🔌 Backend Connection
+
+- **No backend changes** — Analytics page connects to `GET /api/payment/history`
+- Data is processed client-side: counts safe/medium/high transactions, sums blocked amounts
+- Debug logs added: `[Analytics] Fetching history...` visible in Chrome DevTools console
+
+---
+
 **🎉 Congratulations! Your migration is complete!** 🎉
 
 Everything is working, code is on GitHub, and you're ready to build amazing fraud detection features! 💙

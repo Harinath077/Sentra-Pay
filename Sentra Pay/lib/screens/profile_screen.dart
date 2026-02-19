@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_provider.dart';
-import '../models/transaction_history.dart';
+
 import '../theme/app_theme.dart';
 import 'signin_screen.dart';
 
@@ -98,8 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    final trustScore = TransactionHistory.getTrustScore();
-    final tier = TransactionHistory.getTrustTier();
+
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -242,31 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 32),
 
-                  // Trust Score Stats - Clean & Formal
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildStatItem(
-                        'TRUST SCORE',
-                        '${trustScore.toStringAsFixed(0)}%',
-                        Icons.verified_user_rounded,
-                        isDark,
-                      ),
-                      Container(
-                        width: 1,
-                        height: 32,
-                        color: isDark ? Colors.white10 : Colors.grey.shade200,
-                      ),
-                      _buildStatItem(
-                        'MEMBERSHIP',
-                        tier.toUpperCase(),
-                        Icons.workspace_premium_rounded,
-                        isDark,
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -391,33 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, bool isDark) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          size: 24,
-          color: const Color(0xFF4F46E5),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
+
 
   Widget _buildInfoField(
     String label,

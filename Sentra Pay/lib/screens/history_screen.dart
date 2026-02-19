@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_history.dart';
 import '../theme/app_theme.dart';
-import '../widgets/risk_trend_graph.dart';
+import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_provider.dart';
 import '../models/fraud_store.dart';
+import '../widgets/app_loading_indicator.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -18,8 +19,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<Transaction> _history = [];
   bool _isLoading = true;
   String? _errorMessage;
-  String _trustTier = "Bronze";
-  double _trustScore = 50.0;
 
   @override
   void initState() {
@@ -41,12 +40,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _fetchHistory() async {
+    // OPTIMIZATION: Load local data immediately to reduce loading time
+    final fastLocalHistory = TransactionHistory.getHistory();
     if (mounted) {
       setState(() {
-        _isLoading = true;
+        _history = fastLocalHistory;
+        _isLoading = fastLocalHistory.isEmpty; // Only show loader if we have literally no data
         _errorMessage = null;
       });
     }
+
+    // Continue with backend fetch in background
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -130,18 +134,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Icons.dangerous;
   }
   
-  IconData _getTierIcon(String tier) {
-    switch (tier) {
-      case "Platinum":
-        return Icons.workspace_premium;
-      case "Gold":
-        return Icons.stars;
-      case "Silver":
-        return Icons.star;
-      default:
-        return Icons.shield;
-    }
-  }
+
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
@@ -168,8 +161,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final textColor = isDark ? AppTheme.darkTextPrimary : const Color(0xFF0F172A);
     final secondaryColor = isDark ? AppTheme.darkTextSecondary : const Color(0xFF64748B);
 
-    // Use real data for risk trend
-    final riskTrend = _history.map((t) => t.riskScore).toList();
+
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -197,7 +189,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
       body: _isLoading 
-        ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+        ? const AppLoadingIndicator(message: "Loading History...")
         : _errorMessage != null
             ? Center(
                 child: Padding(
@@ -318,11 +310,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
             const SizedBox(height: 24),
 
-            // Risk Trend Graph
-            if (riskTrend.isNotEmpty) ...[
-              RiskTrendGraph(riskScores: riskTrend),
-              const SizedBox(height: 24),
-            ],
+
 
             // Transaction List Header
             Row(
