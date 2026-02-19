@@ -6,6 +6,8 @@ import '../models/fraud_store.dart';
 import '../services/google_auth_service.dart';
 import 'home_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
+import '../models/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -480,9 +482,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
 
                       const SizedBox(height: 24),
-                          ),
-                        ),
-                      ),
+
                     ],
                   ),
                 ),

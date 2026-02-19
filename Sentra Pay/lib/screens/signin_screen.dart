@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../widgets/google_sign_in_button.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -263,43 +264,9 @@ class _SignInScreenState extends State<SignInScreen> {
                     const SizedBox(height: 24),
 
                     // Google Sign-In Button (Official Style)
-                    Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFDADADA), width: 1),
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.white,
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _isLoading ? null : _handleGoogleSignIn,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SvgPicture.asset(
-                                  'assets/images/google_logo.svg',
-                                  height: 32,
-                                  width: 32,
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Continue with Google',
-                                  style: TextStyle(
-                                    color: Color(0xFF3C4043),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: 0.25,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                    GoogleSignInButton(
+                      onPressed: _handleGoogleSignIn,
+                      isLoading: _isLoading,
                     ),
                       const SizedBox(height: 32),
 
