@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  bool _isDarkMode = false;
+  // Always dark mode — premium fintech look
+  bool _isDarkMode = true;
 
   bool get isDarkMode => _isDarkMode;
 
   void toggleTheme() {
-    _isDarkMode = !_isDarkMode;
-    notifyListeners();
+    // Dark mode is permanent — no toggling
   }
 }
