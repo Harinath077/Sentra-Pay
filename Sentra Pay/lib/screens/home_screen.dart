@@ -501,8 +501,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                       style: TextButton.styleFrom(
                                         foregroundColor: isDark
                                             ? const Color(
-                                                0xFF34D399,
-                                              ) // Lighter green for dark mode
+                                                0xFF60A5FA,
+                                              ) // Lighter blue for dark mode
                                             : AppTheme.primaryColor,
                                         textStyle: const TextStyle(
                                           fontWeight: FontWeight.w600,

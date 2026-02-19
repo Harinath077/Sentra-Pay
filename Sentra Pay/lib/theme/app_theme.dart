@@ -4,11 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   // 🎯 Color System (Fintech Premium)
   static const Color primaryColor = Color(
-    0xFF10B981,
-  ); // Emerald Green (Premium)
+    0xFF2563EB,
+  ); // Soft Royal Blue (Trust)
   static const Color accentColor = Color(
-    0xFF34D399,
-  ); // Lighter Green for accents
+    0xFF3B82F6,
+  ); // Lighter Blue for accents
   static const Color backgroundColor = Color(0xFFF8FAFC); // Clean Slate
   static const Color cardSurfaceColor = Color(0xFFFFFFFF); // Pure White
 

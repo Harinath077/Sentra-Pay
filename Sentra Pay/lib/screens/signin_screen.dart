@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_provider.dart';
 import '../theme/app_theme.dart';
-import 'onboarding/premium_signup_screen.dart';
+import 'signup_screen.dart';
 import 'home_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -99,7 +99,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     const Icon(
                       Icons.account_balance_rounded,
                       size: 48,
-                      color: Color(0xFF10B981), // Emerald Green
+                      color: Color(0xFF1E1B4B), // Deep Indigo
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -108,7 +108,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         fontFamily: 'Outfit',
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
-                        color: isDark ? AppTheme.darkTextPrimary : const Color(0xFF10B981),
+                        color: isDark ? AppTheme.darkTextPrimary : const Color(0xFF1E1B4B),
                         letterSpacing: -0.5,
                       ),
                       textAlign: TextAlign.center,
@@ -150,7 +150,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
                         ),
                       ),
                       validator: (value) => (value == null || value.isEmpty) ? 'Required' : null,
@@ -182,7 +182,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(
@@ -216,7 +216,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handleSignIn,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
+                                backgroundColor: const Color(0xFF1E1B4B),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -238,7 +238,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
                           ),
                           child: IconButton(
-                            icon: const Icon(Icons.fingerprint_rounded, color: Color(0xFF10B981), size: 28),
+                            icon: const Icon(Icons.fingerprint_rounded, color: Color(0xFF4F46E5), size: 28),
                             onPressed: () => _showBiometricDialog(context),
                           ),
                         ),
@@ -301,10 +301,10 @@ class _SignInScreenState extends State<SignInScreen> {
                           style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumSignupScreen())),
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignUpScreen())),
                           child: const Text(
                             "Create Account",
-                            style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                            style: TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
