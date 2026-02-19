@@ -12,7 +12,8 @@ import uuid
 from app.core.context_engine import get_user_context
 from app.core.rules_engine import evaluate as evaluate_rules
 from app.core.ml_engine import predict as ml_predict
-from app.core.decision_engine import get_action
+from app.core.decision_engine import get_action, generate_message, generate_recommendations
+from app.config import settings
 from app.core.genai_engine import genai  # 🍌 Import Gemini Banana
 from app.database.models import RiskEvent, Transaction
 from app.database.connection import SessionLocal
@@ -27,6 +28,10 @@ class RiskOrchestrator:
     
     def __init__(self):
         logger.info("Risk Orchestrator initialized")
+    
+    def _generate_transaction_id(self) -> str:
+        """Generate a unique transaction ID."""
+        return f"TXN-{uuid.uuid4().hex[:12].upper()}"
     
     def analyze_transaction(
         self,
@@ -62,13 +67,13 @@ class RiskOrchestrator:
             from app.database.models import User
             user_orm = db.query(User).filter(User.user_id == user_id).first()
             if not user_orm:
-                raise ValueError(f"User not found: {user_id}")
+                raise ValueError(f"User not found: {user_id}")  # User not found error
             
             new_txn = None
             if save:
                 # ONLY CREATE RECORD IF SAVE=TRUE (For Execution)
                 txn_params = {
-                    "transaction_id": transaction_id,
+                    "transaction_id": transaction_id,  # Transaction ID
                     "user_id": user_orm.id,
                     "amount": amount,
                     "receiver": receiver,
@@ -142,6 +147,46 @@ class RiskOrchestrator:
                 flags=rule_result.flags,
                 user_tier=context.user_profile.get("risk_tier", "BRONZE")
             )
+            # --- New policy: separate Identity Risk (authentication) from Fraud Risk
+            # Identity signals (impossible travel, device change, new device) should
+            # trigger authentication escalation (OTP) rather than artificially
+            # inflating the fraud score. We therefore post-process the base
+            # decision to apply that policy.
+            # DEVICE_CHANGE intentionally removed from identity flags because
+            # device-change detection was disabled globally.
+            identity_flags = {"IMPOSSIBLE_TRAVEL", "NEW_DEVICE"}
+            identity_risk = bool(set(rule_result.flags) & identity_flags) or bool(context.txn_stats.get("impossible_travel_flag", False))
+
+            # Thresholds from config
+            low_thr = settings.RISK_THRESHOLD_MODERATE
+            high_thr = settings.RISK_THRESHOLD_HIGH
+
+            # Policy mapping (user-specified):
+            # - identity risk + low fraud -> OTP_REQUIRED (authentication step-up)
+            # - high fraud only -> WARNING (do not immediately BLOCK without identity risk)
+            # - high fraud + identity risk -> BLOCK
+            if identity_risk and final_score < low_thr:
+                action_result.action = "OTP_REQUIRED"
+                action_result.requires_otp = True
+                action_result.risk_level = "HIGH"
+                action_result.message = generate_message(action_result.risk_level, action_result.action, rule_result.flags)
+                action_result.recommendations = generate_recommendations(action_result.risk_level, rule_result.flags)
+
+            elif final_score >= high_thr and not identity_risk:
+                # High fraud but no identity signals => show warning and investigate
+                action_result.action = "WARNING"
+                action_result.requires_otp = False
+                action_result.risk_level = "HIGH"
+                action_result.message = generate_message(action_result.risk_level, action_result.action, rule_result.flags)
+                action_result.recommendations = generate_recommendations(action_result.risk_level, rule_result.flags)
+
+            elif identity_risk and final_score >= high_thr:
+                # High fraud and identity signals -> block
+                action_result.action = "BLOCK"
+                action_result.requires_otp = False
+                action_result.risk_level = "VERY_HIGH"
+                action_result.message = generate_message(action_result.risk_level, action_result.action, rule_result.flags)
+                action_result.recommendations = generate_recommendations(action_result.risk_level, rule_result.flags)
             logger.info(f"✓ Action: {action_result.action} ({action_result.risk_level})")
             
             # Update Transaction with results only if saving
@@ -199,53 +244,49 @@ class RiskOrchestrator:
         """
         STRICT FINTECH SCORING LOGIC.
         """
-        score = 0.0
-        
-        # 1. Receiver History Analysis (STRICT LOGIC)
-        receiver_history = context.receiver_info
-        is_new = receiver_history.get("is_new", True)
-        is_good = receiver_history.get("good_history", False)
-        is_risky = receiver_history.get("risky_history", False)
-        
-        # 2. Add Base Signals
-        # Amount Risk
+        # New combine logic with damping to avoid double-counting ML+rules
+        # behavior_score: ML captures many patterns; use max(ml, rules)
         amount = float(txn_data.get("amount", 0.0))
         avg_amount = context.txn_stats.get("avg_amount_30d", 1000.0)
-        if avg_amount > 0 and amount > (avg_amount * 5):
-            score += 0.15
-            
-        # Contextual Signals
-        if "DEVICE_CHANGE" in flags:
-            score += 0.15
-        
-        # ML and Rule influences (scaled)
-        score += (ml_score * 0.15)
-        score += (rule_score * 0.10)
-        
-        # Suspicious Keywords
-        keywords = ["lottery", "prize", "kyc", "crypto", "refund", "win", "cashback"]
-        note = txn_data.get("note", "").lower()
-        if any(k in note for k in keywords):
-            score += 0.30
 
-        # 3. APPLY HISTORY WEIGHTS LAST (THE OVERRIDE LOGIC)
-        # Case 1: First-Time Receiver
-        if is_new:
-            score += 0.20
-            # If after addition total risk > 0.70, boost it to 0.95 + 0.01 (STRICT REQ)
-            if score > 0.70:
-                score = 0.96
-        
-        # Case 2: Good History
-        elif is_good:
-            score -= 0.05
-            
-        # Case 3: Risky History
-        elif is_risky:
-            score += 0.25
+        # Damped behavior score (use max to avoid double-counting ML+rules)
+        behavior_score = max(float(ml_score or 0.0), float(rule_score or 0.0))
 
-        # Clamping
-        return max(0.0, min(1.0, score))
+        # Weighted blend (reputation removed): reweight behavior vs rule
+        # Old weights: behavior=0.55, rule=0.25, receiver=0.10 (total 0.90)
+        # Normalize and pick conservative split ≈ 0.70 / 0.30
+        final_raw = (
+            0.70 * behavior_score
+            + 0.30 * float(rule_score or 0.0)
+        )
+
+        # Amount sensitivity (Potential Damage multiplier)
+        # Map amount relative to user's behavior to a damage multiplier
+        # ratio = amount / avg_30d
+        ratio = amount / (avg_amount + 1.0)
+        if ratio < 0.3:
+            damage_multiplier = 0.25
+        elif ratio < 1.0:
+            damage_multiplier = 0.5
+        elif ratio < 3.0:
+            damage_multiplier = 0.8
+        else:
+            damage_multiplier = 1.0
+
+        # Final risk = Suspicion × Potential Damage
+        final = float(final_raw) * float(damage_multiplier)
+
+        # NOTE: We no longer enforce an automatic fraud-score floor for
+        # impossible-travel here. Impossible travel is treated as an
+        # identity/authentication signal and handled in the decision layer.
+
+        # Small-first-time receiver forgiveness: avoid blocking trivial small transfers
+        is_new = receiver_history.get("is_new", True)
+        if is_new and amount <= min(250.0, 0.05 * (avg_amount + 1.0)):
+            # soften entirely for micro first-time transfers
+            final = min(final, 0.45)
+
+        return max(0.0, min(1.0, float(final)))
     
     def _build_response(
         self,
@@ -397,6 +438,23 @@ class RiskOrchestrator:
             "color": "#F44336",
             "background": "#FFEBEE",
             "label": "High Risk Blocked",
+            "risk_breakdown": {
+                "behavior_analysis": {
+                    "score": 90,
+                    "weight": 30,
+                    "status": "suspicious"
+                },
+                "amount_analysis": {
+                    "score": 80,
+                    "weight": 30,
+                    "status": "unusual"
+                },
+                "receiver_analysis": {
+                    "score": 100,
+                    "weight": 40,
+                    "status": "blocked"
+                }
+            },
             "risk_factors": [
                 {"factor": "Blacklisted Receiver", "severity": "critical"}
             ],
@@ -452,22 +510,50 @@ class RiskOrchestrator:
             return 20
     
     def _calculate_receiver_score(self, context, receiver: str) -> int:
-        """Calculate receiver analysis score (0-100)."""
+        """
+        Calculate receiver analysis score (0-100).
+        
+        Uses full receiver profile from context engine:
+        - is_new: First-time receiver flag
+        - good_history: Has safe transaction history
+        - risky_history: Has suspicious transaction history
+        - transaction_count: Number of completed transactions
+        - avg_risk_score: Average risk of past transactions
+        - reputation_score: Global fraud ratio (0.0 = clean, 1.0 = all fraud)
+        
+        Score interpretation: 0 = fully trusted, 100 = maximum risk
+        """
         if not context.receiver_info:
-            return 50  # Unknown receiver
+            return 50  # Unknown receiver - neutral
         
-        is_new = context.receiver_info.get("is_new", True)
-        reputation_score = context.receiver_info.get("reputation_score", 0.5)
-        
+        info = context.receiver_info or {}
+        is_new = info.get("is_new", True)
+        is_good = info.get("good_history", False)
+        is_risky = info.get("risky_history", False)
+        txn_count = info.get("transaction_count", 0)
+        avg_risk = info.get("avg_risk_score", 0.0)
+
+        # New baseline: reduce default new-receiver penalty to 30
         score = 0
-        
+
         if is_new:
-            score += 40
-        
-        # Reputation contribution (0.0 = good, 1.0 = bad)
-        score += int(reputation_score * 60)
-        
-        return min(score, 100)
+            # Less punitive base for first-time receivers
+            score = 30
+
+        elif is_risky:
+            score = 75 + int(avg_risk * 25)  # 75-100
+
+        elif is_good:
+            trust_bonus = min(txn_count * 2, 20)
+            score = max(10 - trust_bonus, 5)
+
+        else:
+            score = 40 + int(avg_risk * 30)  # 40-70 based on avg risk
+
+        # NOTE: Global `reputation_score` is no longer used to modify receiver
+        # score. The system treats receiver reputation as not applicable per
+        # current policy.
+        return max(0, min(score, 100))
     
     def _extract_risk_factors(self, rule_result, ml_result, context) -> list:
         """Extract top risk factors for user explanation."""

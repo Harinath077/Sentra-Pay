@@ -121,7 +121,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # Request timing middleware
 @app.middleware("http")
 async def log_request_time(request: Request, call_next):

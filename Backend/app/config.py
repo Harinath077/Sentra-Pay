@@ -36,8 +36,11 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["*"]
     
     # ML Model Configuration
-    ML_MODEL_PATH: str = "app/ml/fraud_model.cbm"
+    # ML model path: backend runs from Sentra-Pay/Backend, model stored in ../ML/
+    ML_MODEL_PATH: str = "../ML/fraud_model.cbm"
     ML_MODEL_VERSION: str = "v1.1"
+    # History CSV for simulated user memory (default to backend/demo_data)
+    HISTORY_CSV_PATH: str = "demo_data/synthetic_upi_behavior_100.csv"
     
     # Rate Limiting
     RATE_LIMIT_PAYMENTS: int = 10
@@ -56,8 +59,8 @@ class Settings(BaseSettings):
     
     # Risk Thresholds
     RISK_THRESHOLD_LOW: float = 0.30
-    RISK_THRESHOLD_MODERATE: float = 0.60
-    RISK_THRESHOLD_HIGH: float = 0.80
+    RISK_THRESHOLD_MODERATE: float = 0.50
+    RISK_THRESHOLD_HIGH: float = 0.75
     
     # OAuth Configuration
     GOOGLE_CLIENT_ID: Optional[str] = None

@@ -46,7 +46,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
   RiskCategory _riskCategory = RiskCategory.low;
   double _behaviorScore = 0.0;
   double _amountScore = 0.0;
-  final double _receiverScore = 0.0;
+  double _receiverScore = 0.0;
   bool _isLocalAnalysis = false;
 
   @override
@@ -89,6 +89,7 @@ class _EnhancedRiskResultScreenState extends State<EnhancedRiskResultScreen>
       _riskCategory = result.category;
       _behaviorScore = result.behaviorScore;
       _amountScore = result.amountScore;
+      _receiverScore = result.receiverScore;
     });
   }
 

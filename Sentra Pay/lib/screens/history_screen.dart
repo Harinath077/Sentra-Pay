@@ -59,8 +59,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       print("Fetching history from: ${ApiService.baseUrl}");
       final backendData = await ApiService.getTransactionHistory(token);
       
-      List<Transaction> allTransactions = [];
-      
       if (backendData.isNotEmpty) {
         final List<Transaction> backendTransactions = backendData.map((data) {
           return Transaction(
@@ -83,53 +81,41 @@ class _HistoryScreenState extends State<HistoryScreen> {
         }).toList();
         FraudStore.syncHistory(analyticsData);
 
-        allTransactions = backendTransactions;
-      }
-      
-      // Always merge with local transactions to ensure nothing is missed
-      final localHistory = TransactionHistory.getHistory();
-      
-      // Add local transactions that aren't in backend (based on ID)
-      final backendIds = allTransactions.map((t) => t.id).toSet();
-      for (var localTxn in localHistory) {
-        if (!backendIds.contains(localTxn.id)) {
-          allTransactions.add(localTxn);
+        if (mounted) {
+          setState(() {
+            _history = backendTransactions;
+            _isLoading = false;
+            
+            if (_history.isNotEmpty) {
+               int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
+               _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
+            }
+            
+            _trustTier = TransactionHistory.getTrustTier();
+          });
         }
-      }
-      
-      // Sort by timestamp (newest first)
-      allTransactions.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      
-      if (mounted) {
-        setState(() {
-          _history = allTransactions;
-          _isLoading = false;
-          
-
-        });
+      } else {
+        // Backend returned empty
+        if (mounted) {
+          setState(() {
+            _history = [];
+            _isLoading = false;
+            _trustScore = 50.0;
+            _trustTier = "Bronze";
+          });
+        }
       }
     } catch (e) {
       print("Error fetching history: $e");
-      
-      // Fall back to local history when backend fails
-      final localHistory = TransactionHistory.getHistory();
-      
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _history = localHistory;
+          _history = [];
           
-
-          
-          // Show warning that we're using local data
           if (e.toString().contains("Connection refused") || e.toString().contains("Network is unreachable")) {
-             _errorMessage = localHistory.isNotEmpty 
-                 ? "Using local history (Backend offline)"
-                 : "Could not connect to server.\nCheck your internet or backend.";
+             _errorMessage = "Could not connect to server.\nCheck your internet or backend.";
           } else {
-             _errorMessage = localHistory.isNotEmpty
-                 ? "Using local history (Backend error)"
-                 : "Failed to load history.\nWait a moment and try again.";
+             _errorMessage = "Failed to load history.\nWait a moment and try again.";
           }
         });
       }
@@ -238,16 +224,89 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                 ),
               )
-            : RefreshIndicator(
-                onRefresh: _fetchHistory,
-                color: AppTheme.primaryColor,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+            : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Trust Score Card
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2563EB).withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-
+                      Icon(
+                        _getTierIcon(_trustTier),
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        "$_trustTier User",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "${_trustScore.toStringAsFixed(0)}%",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    "Trust Score",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "${_history.length} transactions analyzed",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
             const SizedBox(height: 24),
 
@@ -322,7 +381,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ],
         ),
       ),
-    ),
     );
   }
 

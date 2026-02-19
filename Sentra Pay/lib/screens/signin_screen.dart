@@ -4,8 +4,6 @@ import '../models/auth_provider.dart';
 import '../theme/app_theme.dart';
 import 'onboarding/premium_signup_screen.dart';
 import 'home_screen.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import '../widgets/google_sign_in_button.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -263,10 +261,34 @@ class _SignInScreenState extends State<SignInScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Google Sign-In Button (Official Style)
-                    GoogleSignInButton(
-                      onPressed: _handleGoogleSignIn,
-                      isLoading: _isLoading,
+                    // Google Sign-In Button
+                    OutlinedButton(
+                      onPressed: _isLoading ? null : _handleGoogleSignIn,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        side: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300),
+                        backgroundColor: isDark ? Colors.white.withOpacity(0.02) : Colors.white,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.network(
+                            "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg",
+                            height: 20,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, color: Colors.blue),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            "Continue with Google",
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? AppTheme.darkTextPrimary : const Color(0xFF1E1B4B),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                       const SizedBox(height: 32),
 
