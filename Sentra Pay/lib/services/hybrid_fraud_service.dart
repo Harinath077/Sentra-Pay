@@ -208,11 +208,11 @@ class HybridFraudService {
       int scoreChange = 0;
 
       if (riskScore < 0.3) {
-        scoreChange = 1; // Low risk: increase trust
+        scoreChange = 1; 
       } else if (riskScore < 0.6) {
-        scoreChange = -1; // Moderate risk: slight decrease
+        scoreChange = -1; 
       } else {
-        scoreChange = -5; // High risk: significant decrease
+        scoreChange = -5; 
       }
 
       int newScore = (currentScore + scoreChange).clamp(0, 100);
@@ -224,7 +224,7 @@ class HybridFraudService {
     }
   }
 
-  /// Report fraud to Firestore
+  
   Future<void> reportFraud(String recipientVPA, {String? reason}) async {
     final userId = _authService.currentUserId;
     if (userId == null) return;
@@ -236,7 +236,7 @@ class HybridFraudService {
     );
   }
 
-  /// Get transaction history from Firestore
+  
   Future<List<Map<String, dynamic>>> getTransactionHistory() async {
     final userId = _authService.currentUserId;
     if (userId == null) return [];
@@ -244,7 +244,7 @@ class HybridFraudService {
     return await _firestoreService.getTransactionHistory(userId);
   }
 
-  /// Get transaction history stream (real-time)
+  
   Stream<List<Map<String, dynamic>>> getTransactionHistoryStream() {
     final userId = _authService.currentUserId;
     if (userId == null) {

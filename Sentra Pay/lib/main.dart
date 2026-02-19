@@ -7,7 +7,8 @@ import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 import 'models/auth_provider.dart';
 import 'models/settings_provider.dart';
-import 'screens/signin_screen.dart';import 'package:google_fonts/google_fonts.dart';
+import 'screens/signin_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -45,12 +46,8 @@ class UpiRiskApp extends StatelessWidget {
     return MaterialApp(
       title: 'Sentra Pay',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme.copyWith(
-        textTheme: GoogleFonts.poppinsTextTheme(AppTheme.lightTheme.textTheme),
-      ),
-      darkTheme: AppTheme.darkTheme.copyWith(
-        textTheme: GoogleFonts.poppinsTextTheme(AppTheme.darkTheme.textTheme),
-      ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       themeAnimationDuration: const Duration(milliseconds: 800),
       themeAnimationCurve: Curves.easeInOutCubic,

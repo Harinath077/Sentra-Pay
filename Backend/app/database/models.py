@@ -83,6 +83,10 @@ class Transaction(Base):
     current_hash = Column(String(64), nullable=True, index=True)
     previous_hash = Column(String(64), nullable=True)
     
+    # Location Data (for geo-velocity fraud detection)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -32,14 +32,38 @@ def load_model():
         from catboost import CatBoostClassifier
         
         model_path = getattr(settings, "ML_MODEL_PATH", "app/ml_models/fraud_model.cbm")
-        
-        if os.path.exists(model_path):
+        # Resolve relative paths robustly: try the configured path first,
+        # then a few common locations relative to the repository/app layout.
+        candidate_paths = [model_path]
+        if not os.path.isabs(model_path):
+            candidate_paths.append(os.path.abspath(os.path.join(os.getcwd(), model_path)))
+            # Try typical repo layout from this module: go up to Sentra-Pay root and look in ML/
+            candidate_paths.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'ML', os.path.basename(model_path))))
+            # Try Sentra-Pay/ML relative to workspace cwd
+            candidate_paths.append(os.path.abspath(os.path.join(os.getcwd(), 'Sentra-Pay', 'ML', os.path.basename(model_path))))
+            # Walk upward from this file's directory to look for a top-level ML/ folder
+            cur_dir = os.path.abspath(os.path.dirname(__file__))
+            for _ in range(6):
+                upward_cand = os.path.abspath(os.path.join(cur_dir, '..', 'ML', os.path.basename(model_path)))
+                candidate_paths.append(upward_cand)
+                cur_dir = os.path.abspath(os.path.join(cur_dir, '..'))
+
+        found = None
+        for p in candidate_paths:
+            try:
+                if p and os.path.exists(p):
+                    found = p
+                    break
+            except Exception:
+                continue
+
+        if found:
             model = CatBoostClassifier()
-            model.load_model(model_path)
+            model.load_model(found)
             model_available = True
-            logger.info(f"ML model loaded from: {model_path}")
+            logger.info(f"ML model loaded from: {found}")
         else:
-            logger.warning(f"ML model not found at {model_path}. Using fallback predictions.")
+            logger.warning(f"ML model not found at any candidate path: {candidate_paths}. Using fallback predictions.")
             model_available = False
     
     except ImportError:
@@ -72,39 +96,81 @@ def predict(txn_data: Dict, context: UserContext) -> MLResult:
     # Extract features
     features = engineer_features(txn_data, context)
     
-    # Get prediction
-    if model_available and model is not None:
-        # Real model prediction - updated to 22 features
+    # Build the 7-feature vector expected by the simplified model
+    try:
+        amount_deviation = float(features.get('deviation_from_sender_avg', 0.0))
+        night_ratio = float(features.get('night_txn_ratio', 0.0))
+        txn_last_1hr = float(features.get('txn_count_1h', features.get('txn_count_1hour', 0)))
+        is_new_receiver = float(features.get('is_new_receiver', 0.0))
+        impossible_travel_flag = 1.0 if context.txn_stats.get('impossible_travel_flag') else 0.0
+
+        # receiver_txn_count: prefer receiver_info.total_transactions then stats.receiver_map
+        receiver = txn_data.get('receiver')
+        receiver_txn_count = 0.0
         try:
-            # We match the EXACT names and order from the model
-            feature_names = [
-                'amount', 'payment_mode', 'receiver_type', 'is_new_receiver', 
-                'avg_amount_7d', 'avg_amount_30d', 'max_amount_7d', 'txn_count_1h', 
-                'txn_count_24h', 'days_since_last_txn', 'night_txn_ratio', 
-                'location_mismatch', 'is_night', 'is_round_amount', 'velocity_check', 
-                'deviation_from_sender_avg', 'exceeds_recent_max', 'amount_log', 
-                'hour_sin', 'hour_cos', 'ratio_30d', 'risk_profile'
-            ]
-            
-            # Ensure features are correctly typed (CatBoost is strict about categorical types)
-            feature_vector = []
-            for i, name in enumerate(feature_names):
-                val = float(features.get(name, 0.0))
-                # Features at indices 1, 2, 21 are categorical (payment_mode, receiver_type, risk_profile)
-                if i in [1, 2, 21]:
-                    feature_vector.append(int(val))
-                else:
-                    feature_vector.append(val)
-            
-            # Predict probability
-            ml_score = float(model.predict_proba([feature_vector])[0][1])
+            receiver_txn_count = float(context.receiver_info.get('total_transactions', 0) or 0)
+        except Exception:
+            receiver_txn_count = 0.0
+        if receiver_txn_count == 0:
+            rmap = context.txn_stats.get('receiver_map', {})
+            if receiver and receiver in rmap:
+                receiver_txn_count = float(rmap[receiver].get('count', 0))
+
+        receiver_amount_deviation = float(features.get('receiver_amount_deviation', 1.0))
+
+        model_vector = [
+            amount_deviation,
+            night_ratio,
+            txn_last_1hr,
+            is_new_receiver,
+            impossible_travel_flag,
+            receiver_txn_count,
+            receiver_amount_deviation
+        ]
+
+    except Exception as e:
+        logger.error(f"Error building 7-feature vector: {e}")
+        model_vector = None
+
+    # Get prediction using the simplified 7-feature interface if possible
+    if model_available and model is not None and model_vector is not None:
+        try:
+            # Attempt to use model with the 7-feature vector
+            ml_score = float(model.predict_proba([model_vector])[0][1])
             model_version = getattr(settings, "ML_MODEL_VERSION", "v1.1")
-            
-            logger.info(f"ML prediction: {ml_score:.3f} using {len(feature_vector)} features")
+            logger.info(f"ML prediction (7-features): {ml_score:.3f}")
         except Exception as e:
-            logger.error(f"Error during ML inference: {e}")
-            ml_score = calculate_fallback_score(features)
-            model_version = "v1.1-fallback"
+            logger.warning(f"Model failed for 7-feature vector, attempting full-vector fallback: {e}")
+            # Try the full 22-feature vector as a fallback (model may expect original feature layout)
+            try:
+                feature_names = [
+                    'amount', 'payment_mode', 'receiver_type', 'is_new_receiver',
+                    'avg_amount_7d', 'avg_amount_30d', 'max_amount_7d', 'txn_count_1h',
+                    'txn_count_24h', 'days_since_last_txn', 'night_txn_ratio',
+                    'location_mismatch', 'is_night', 'is_round_amount', 'velocity_check',
+                    'deviation_from_sender_avg', 'exceeds_recent_max', 'amount_log',
+                    'hour_sin', 'hour_cos', 'ratio_30d', 'risk_profile'
+                ]
+                feature_vector = []
+                for i, name in enumerate(feature_names):
+                    val = features.get(name, 0.0)
+                    try:
+                        valf = float(val)
+                    except Exception:
+                        valf = 0.0
+                    # indices 1,2,21 are categorical in original model
+                    if i in [1, 2, 21]:
+                        feature_vector.append(int(valf))
+                    else:
+                        feature_vector.append(valf)
+
+                ml_score = float(model.predict_proba([feature_vector])[0][1])
+                model_version = getattr(settings, "ML_MODEL_VERSION", "v1.1") + "-fullvec"
+                logger.info(f"ML prediction (22-features fallback): {ml_score:.3f}")
+            except Exception as e2:
+                logger.error(f"Full-vector model fallback failed: {e2}")
+                ml_score = calculate_fallback_score(features)
+                model_version = "v1.1-fallback"
     else:
         # Fallback: Rule-based prediction
         ml_score = calculate_fallback_score(features)
@@ -188,13 +254,16 @@ def engineer_features(txn_data: Dict, context: UserContext) -> Dict:
         "txn_count_24h": float(stats.get("txn_count_24h", 0)),
         "days_since_last_txn": float(stats.get("days_since_last_txn", 999)),
         "night_txn_ratio": night_ratio,
-        "location_mismatch": 0.0, # Placeholder
+        # location_mismatch: 1.0 if current txn city differs from last known city or impossible_travel_flag
+        "location_mismatch": 0.0,
         "is_night": is_night,
         "is_round_amount": is_round,
         "velocity_check": velocity_check,
         "deviation_from_sender_avg": deviation,
         "exceeds_recent_max": exceeds_max,
         "amount_log": amount_log,
+        # receiver amount deviation (current / receiver_avg)
+        "receiver_amount_deviation": 1.0,
         "hour_sin": hour_sin,
         "hour_cos": hour_cos,
         "ratio_30d": ratio_30d,
@@ -204,9 +273,48 @@ def engineer_features(txn_data: Dict, context: UserContext) -> Dict:
         "risky_history_flag": 1.0 if receiver_info.get("risky_history") else 0.0,
         "good_history_flag": 1.0 if receiver_info.get("good_history") else 0.0,
         "amount_to_avg_ratio": deviation,
-        "device_change_flag": 1.0 if device_id and device_id not in profile.get("known_devices", []) else 0.0,
-        "receiver_reputation_score": risk_profile
+        # Device-change feature disabled: keep as 0.0 for compatibility
+        "device_change_flag": 0.0,
+        # Reputation removed from receiver scoring — set to neutral 0.0
+        "receiver_reputation_score": 0.0
     }
+
+    # Additional derived features using history stats
+    # receiver average
+    receiver_avg = None
+    try:
+        # receiver_info may have avg_amount key or 'avg_amount' from CSV summary
+        receiver_avg = receiver_info.get('avg_amount') if receiver_info.get('avg_amount') is not None else None
+    except Exception:
+        receiver_avg = None
+
+    if receiver_avg and receiver_avg > 0:
+        features['receiver_amount_deviation'] = amount / float(receiver_avg)
+    else:
+        # fallback: if receiver_map has values
+        rmap = stats.get('receiver_map', {})
+        rentry = rmap.get(receiver)
+        if rentry and rentry.get('amounts'):
+            avg_r = sum(rentry['amounts']) / len(rentry['amounts'])
+            features['receiver_amount_deviation'] = amount / (avg_r if avg_r > 0 else 1.0)
+
+    # location mismatch / impossible travel
+    current_city = txn_data.get('ip_city') or txn_data.get('city')
+    last_city = stats.get('last_city')
+    if stats.get('impossible_travel_flag'):
+        features['location_mismatch'] = 1.0
+    elif last_city and current_city and last_city.lower() != str(current_city).lower():
+        # if last txn was recent (days_since_last_txn small) consider mismatch
+        if stats.get('days_since_last_txn', 999) <= 2:
+            features['location_mismatch'] = 1.0
+
+    # unusual hour detection
+    frequent_hours = stats.get('frequent_hours') or []
+    unusual_hour = 0.0
+    if frequent_hours and hour not in frequent_hours:
+        unusual_hour = 1.0
+    # expose for downstream rules/tests
+    features['unusual_hour'] = unusual_hour
     
     return features
 

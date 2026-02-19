@@ -9,6 +9,7 @@ import logging
 
 from app.core.context_engine import UserContext, check_new_receiver
 from app.config import settings
+from app.utils.geo_velocity import geo_velocity_check
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +110,21 @@ def evaluate(txn_data: Dict, context: UserContext) -> RuleResult:
         result.flags.append("HIGH_FAILED_TXN")
     
     # ────────────────────────────────────────────────
+    # RULE 6: Geo-Velocity Check (Location Mismatch)
+    # ────────────────────────────────────────────────
+    geo_score = check_geo_velocity(txn_data, context)
+    result.rule_breakdown["geo_velocity"] = geo_score
+    
+    if geo_score >= 0.40:
+        result.flags.append("IMPOSSIBLE_TRAVEL")
+    elif geo_score >= 0.20:
+        result.flags.append("SUSPICIOUS_TRAVEL")
+    
+    # ────────────────────────────────────────────────
     # COMBINE RULE SCORES
     # ────────────────────────────────────────────────
     result.rule_score = min(
-        velocity_score + amount_anomaly_score + device_score + failed_txn_score,
+        velocity_score + amount_anomaly_score + device_score + failed_txn_score + geo_score,
         1.0  # Cap at 1.0
     )
     
@@ -143,9 +155,12 @@ def check_velocity(txn_count_5min: int, txn_count_1hour: int, days_since_last: i
     if days_since_last > 7 and txn_count_5min >= 3:
         score += 0.35
         logger.warning(f"Dormant account burst: {days_since_last} days, {txn_count_5min} txns/5min")
-    
-    # High frequency in 5 minutes
-    if txn_count_5min >= 5:
+
+    # High frequency in 5 minutes (burst)
+    # Updated: trigger at 4+ txns in 5 min per new rules
+    if txn_count_5min >= 6:
+        score += 0.35
+    elif txn_count_5min >= 4:
         score += 0.25
     elif txn_count_5min >= 3:
         score += 0.15
@@ -233,9 +248,15 @@ def check_amount_anomaly(
     amount_to_avg_ratio = amount / avg_amount_30d
     
     # New receiver + high amount (CRITICAL PATTERN)
+    # Also apply the specific rule: if is_new_receiver AND amount_deviation > 4 -> +0.20
+    amount_to_avg_ratio = amount / avg_amount_30d
     if is_new_receiver and amount > 3 * avg_amount_30d:
         score += 0.30
         logger.warning(f"New receiver + high amount: ₹{amount} vs avg ₹{avg_amount_30d}")
+
+    if is_new_receiver and amount_to_avg_ratio > 4:
+        score += 0.20
+        logger.info(f"New receiver + large deviation: ratio={amount_to_avg_ratio:.2f}")
     
     # Extreme amount deviation
     if amount_to_avg_ratio > 5:
@@ -261,13 +282,8 @@ def check_device_change(device_id: str, known_devices: List[str]) -> float:
     Returns:
         Risk score 0.0 - 1.0
     """
-    if not device_id:
-        return 0.0
-    
-    if device_id not in known_devices:
-        logger.info(f"New device detected: {device_id}")
-        return 0.15  # Moderate risk for new device
-    
+    # Device-change detection has been intentionally disabled.
+    # Returning 0.0 ensures no DEVICE_CHANGE flag is raised by rules.
     return 0.0
 
 
@@ -292,3 +308,72 @@ def check_failed_txn_pattern(failed_count: int) -> float:
         return 0.10
     
     return 0.0
+
+
+def check_geo_velocity(txn_data: Dict, context: UserContext) -> float:
+    """
+    Check for impossible travel between transactions.
+    
+    Detects patterns like:
+    - Simultaneous transactions in different cities (SIM swap)
+    - Supersonic travel speed (credential theft)
+    - High-speed travel (suspicious but possible)
+    
+    Args:
+        txn_data: Current transaction data with latitude/longitude
+        context: User context with last transaction location
+    
+    Returns:
+        Risk score 0.0 - 0.50
+    """
+    # Extract current transaction location
+    curr_lat = txn_data.get("latitude")
+    curr_lon = txn_data.get("longitude")
+    
+    if curr_lat is None or curr_lon is None:
+        logger.debug("No location data in current transaction")
+        return 0.0
+    
+    # Get last transaction from context
+    last_txn = context.txn_stats.get("last_transaction")
+    
+    if not last_txn:
+        logger.debug("No previous transaction for geo-velocity check")
+        return 0.0
+    
+    prev_lat = last_txn.get("lat")
+    prev_lon = last_txn.get("lon")
+    prev_timestamp = last_txn.get("timestamp")
+    
+    if prev_lat is None or prev_lon is None or prev_timestamp is None:
+        logger.debug("Incomplete location data in previous transaction")
+        return 0.0
+    
+    # Prepare transaction dicts for geo_velocity_check
+    previous_txn = {
+        "lat": prev_lat,
+        "lon": prev_lon,
+        "timestamp": prev_timestamp
+    }
+    
+    current_txn = {
+        "lat": curr_lat,
+        "lon": curr_lon,
+        "timestamp": datetime.now()
+    }
+    
+    # Run geo-velocity check
+    result = geo_velocity_check(previous_txn, current_txn)
+    
+    # Log significant findings
+    if result["risk_score"] >= 0.20:
+        logger.warning(
+            f"Geo-velocity alert: {result['flag']} - "
+            f"{result['distance_km']} km in {result['time_hours']} hrs "
+            f"({result['speed_kmh']} km/h)"
+        )
+    
+    # Store geo-velocity result in context for response
+    context.geo_velocity_result = result
+    
+    return result["risk_score"]

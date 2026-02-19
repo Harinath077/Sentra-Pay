@@ -4,7 +4,6 @@ import '../models/auth_provider.dart';
 import '../theme/app_theme.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -262,43 +261,33 @@ class _SignInScreenState extends State<SignInScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Google Sign-In Button (Official Style)
-                    Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFDADADA), width: 1),
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.white,
+                    // Google Sign-In Button
+                    OutlinedButton(
+                      onPressed: _isLoading ? null : _handleGoogleSignIn,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        side: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300),
+                        backgroundColor: isDark ? Colors.white.withOpacity(0.02) : Colors.white,
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _isLoading ? null : _handleGoogleSignIn,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SvgPicture.asset(
-                                  'assets/images/google_logo.svg',
-                                  height: 32,
-                                  width: 32,
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Continue with Google',
-                                  style: TextStyle(
-                                    color: Color(0xFF3C4043),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: 0.25,
-                                  ),
-                                ),
-                              ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.network(
+                            "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg",
+                            height: 20,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, color: Colors.blue),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            "Continue with Google",
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? AppTheme.darkTextPrimary : const Color(0xFF1E1B4B),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                       const SizedBox(height: 32),

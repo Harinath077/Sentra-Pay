@@ -75,13 +75,35 @@ def get_user_context(user_id: str, receiver: Optional[str] = None, db: Optional[
             # Cache for 5 minutes
             redis_client.set_user_profile(user_id, user_profile)
         
-        # Calculate transaction statistics
+        # Calculate transaction statistics from DB
         txn_stats = calculate_user_stats(user_id, db)
+
+        # Augment with CSV-based history (simulation memory) if available
+        try:
+            from app.core.history_engine import compute_user_stats as csv_compute_stats, get_receiver_summary_for_user
+            csv_stats = csv_compute_stats(user_id)
+            # Merge sensible fields (prefer DB values, fallback to CSV)
+            for k, v in csv_stats.items():
+                if k not in txn_stats or not txn_stats.get(k):
+                    txn_stats[k] = v
+        except Exception as e:
+            logger.debug(f"CSV history not available or failed to compute; continuing with DB stats. Error: {e}")
         
         # Get receiver reputation if provided
         receiver_info = {}
         if receiver:
             receiver_info = get_receiver_reputation(receiver, db)
+            
+            # Merge CSV-derived receiver summary if available
+            try:
+                from app.core.history_engine import get_receiver_summary_for_user
+                csv_rec = get_receiver_summary_for_user(user_id, receiver)
+                # Map CSV summary keys into receiver_info expected fields
+                receiver_info.setdefault('is_new', csv_rec.get('is_new', receiver_info.get('is_new', True)))
+                receiver_info.setdefault('total_transactions', csv_rec.get('total_transactions', receiver_info.get('total_transactions', 0)))
+                receiver_info.setdefault('reputation_score', csv_rec.get('reputation_score', receiver_info.get('reputation_score', 0.5)))
+            except Exception:
+                pass
             
             # ─────────────────────────────────────────────────────────────
             # NEW: Analyze detailed receiver history (The Brain update)
@@ -140,8 +162,7 @@ def calculate_user_stats(user_id: str, db: Session) -> Dict:
     
     internal_user_id = user_orm.id
 
-    from datetime import timezone
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     thirty_days_ago = now - timedelta(days=30)
     seven_days_ago = now - timedelta(days=7)
     one_day_ago = now - timedelta(days=1)

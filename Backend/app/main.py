@@ -120,10 +120,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-<<<<<<< HEAD
-=======
-
->>>>>>> 672df7f69bb455f5826a9a209673a38cb0a0d427
 
 # Request timing middleware
 @app.middleware("http")
