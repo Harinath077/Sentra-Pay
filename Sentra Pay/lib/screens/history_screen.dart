@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_provider.dart';
 import '../models/fraud_store.dart';
+import '../widgets/app_loading_indicator.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -18,8 +19,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<Transaction> _history = [];
   bool _isLoading = true;
   String? _errorMessage;
-  String _trustTier = "Bronze";
-  double _trustScore = 50.0;
 
   @override
   void initState() {
@@ -41,12 +40,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _fetchHistory() async {
+    // OPTIMIZATION: Load local data immediately to reduce loading time
+    final fastLocalHistory = TransactionHistory.getHistory();
     if (mounted) {
       setState(() {
-        _isLoading = true;
+        _history = fastLocalHistory;
+        _isLoading = fastLocalHistory.isEmpty; // Only show loader if we have literally no data
         _errorMessage = null;
       });
     }
+
+    // Continue with backend fetch in background
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -101,14 +105,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           _history = allTransactions;
           _isLoading = false;
           
-          if (_history.isNotEmpty) {
-             int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
-             _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
-          } else {
-             _trustScore = 50.0;
-          }
-          
-          _trustTier = TransactionHistory.getTrustTier();
+
         });
       }
     } catch (e) {
@@ -122,14 +119,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           _isLoading = false;
           _history = localHistory;
           
-          if (_history.isNotEmpty) {
-             int safeTxns = _history.where((t) => t.riskScore < 0.3).length;
-             _trustScore = (safeTxns / _history.length * 100).clamp(0, 100).toDouble();
-          } else {
-             _trustScore = 50.0;
-          }
-          
-          _trustTier = TransactionHistory.getTrustTier();
+
           
           // Show warning that we're using local data
           if (e.toString().contains("Connection refused") || e.toString().contains("Network is unreachable")) {
@@ -158,18 +148,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Icons.dangerous;
   }
   
-  IconData _getTierIcon(String tier) {
-    switch (tier) {
-      case "Platinum":
-        return Icons.workspace_premium;
-      case "Gold":
-        return Icons.stars;
-      case "Silver":
-        return Icons.star;
-      default:
-        return Icons.shield;
-    }
-  }
+
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
@@ -224,7 +203,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
       body: _isLoading 
-        ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+        ? const AppLoadingIndicator(message: "Loading History...")
         : _errorMessage != null
             ? Center(
                 child: Padding(
@@ -268,83 +247,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Trust Score Card
-                      Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _getTierIcon(_trustTier),
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        "$_trustTier User",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "${_trustScore.toStringAsFixed(0)}%",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    "Trust Score",
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      "${_history.length} transactions analyzed",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+
 
             const SizedBox(height: 24),
 

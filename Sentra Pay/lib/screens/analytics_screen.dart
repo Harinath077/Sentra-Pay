@@ -6,6 +6,8 @@ import '../theme/app_theme.dart';
 import '../models/auth_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/risk_trend_graph.dart';
+import '../widgets/app_loading_indicator.dart';
+import '../models/transaction_history.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -61,53 +63,61 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   void _loadStats() async {
+    // 1. Fast Load from Local Storage
+    final localHistory = TransactionHistory.getHistory();
+    if (localHistory.isNotEmpty && mounted) {
+      _processHistoryData(localHistory.map((t) => {
+        'risk_level': t.riskCategory,
+        'risk': t.riskCategory,
+        'amount': t.amount,
+        'risk_score': t.riskScore,
+        'status': t.wasBlocked ? 'BLOCKED' : 'SUCCESS',
+      }).toList());
+    }
+
+    // 2. Fetch from Backend and Merge
     try {
       final token =
           Provider.of<AuthProvider>(context, listen: false).token ?? '';
-      print('[Analytics] Fetching history with token: ${token.isNotEmpty ? "present" : "EMPTY"}');
-      final history = await ApiService.getTransactionHistory(token);
-      print('[Analytics] Got ${history.length} transactions from backend');
+      final backendHistory = await ApiService.getTransactionHistory(token);
+      
       if (mounted) {
-        int blocked = 0;
-        int safe = 0;
-        int medium = 0;
-        double totalBlockedAmount = 0;
-        for (var t in history) {
-          final risk =
-              (t['risk_level'] ?? t['risk'] ?? '').toString().toUpperCase();
-          final amount = (t['amount'] ?? 0).toDouble();
-          if (risk == 'HIGH' || risk == 'VERY_HIGH' || risk == 'BLOCKED') {
-            blocked++;
-            totalBlockedAmount += amount;
-          } else if (risk == 'MODERATE' || risk == 'MEDIUM') {
-            medium++;
-          } else {
-            safe++;
+        // MERGE: Combine backend data with local data to ensure we show everything
+        // This fixes the issue where data disappears if backend returns empty/stale list
+        final localList = TransactionHistory.getHistory();
+        final Set<String> processedIds = {};
+        final List<dynamic> combinedHistory = [];
+
+        // Add Backend items first (Source of Truth)
+        for (var item in backendHistory) {
+          final id = item['transaction_id'].toString();
+          if (id != 'null' && id.isNotEmpty) {
+            processedIds.add(id);
+          }
+          combinedHistory.add(item);
+        }
+
+        // Add Local items that are NOT in backend
+        for (var txn in localList) {
+          if (!processedIds.contains(txn.id)) {
+             // Map local Transaction to the format expected by _processHistoryData
+             combinedHistory.add({
+               'transaction_id': txn.id,
+               'risk_level': txn.riskCategory,
+               'risk': txn.riskCategory,
+               'amount': txn.amount,
+               'risk_score': txn.riskScore,
+               'status': txn.wasBlocked ? 'BLOCKED' : 'SUCCESS',
+               // Add other fields if needed
+             });
           }
         }
-        // Extract risk scores for graph (Limit to last 15 for readability, and reverse to show Old -> New)
-        final recentHistory = history.take(15).toList().reversed;
-        final riskScores = recentHistory.map((t) {
-          final score = (t['risk_score'] ?? 0).toDouble();
-          return score <= 1.0 ? score * 100 : score;
-        }).toList();
-        
-        setState(() {
-          _totalTransactions = history.length;
-          _blockedCount = blocked;
-          _safeCount = safe;
-          _mediumCount = medium;
-          _highCount = blocked;
-          _riskScores = riskScores;
-          _accuracy =
-              history.isEmpty ? 0 : ((safe / history.length) * 100);
-          _moneyProtected = totalBlockedAmount;
-          _isLoading = false;
-        });
-        _startAnimations();
+
+        _processHistoryData(combinedHistory);
       }
     } catch (e) {
       print('[Analytics] Error loading stats: $e');
+      // On error, we already showed local data, so we just stop loading specific animation
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -115,6 +125,46 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         _startAnimations();
       }
     }
+  }
+
+  void _processHistoryData(List<dynamic> history) {
+    int blocked = 0;
+    int safe = 0;
+    int medium = 0;
+    double totalBlockedAmount = 0;
+    
+    for (var t in history) {
+      final risk = (t['risk_level'] ?? t['risk'] ?? '').toString().toUpperCase();
+      final amount = (t['amount'] ?? 0).toDouble();
+      if (risk == 'HIGH' || risk == 'VERY_HIGH' || risk == 'BLOCKED') {
+        blocked++;
+        totalBlockedAmount += amount;
+      } else if (risk == 'MODERATE' || risk == 'MEDIUM') {
+        medium++;
+      } else {
+        safe++;
+      }
+    }
+
+    // Extract risk scores for graph (Limit to last 15)
+    final recentHistory = history.take(15).toList().reversed;
+    final List<double> riskScores = recentHistory.map<double>((t) {
+      final score = (t['risk_score'] ?? 0).toDouble();
+      return score <= 1.0 ? score * 100 : score;
+    }).toList();
+    
+    setState(() {
+      _totalTransactions = history.length;
+      _blockedCount = blocked;
+      _safeCount = safe;
+      _mediumCount = medium;
+      _highCount = blocked;
+      _riskScores = riskScores;
+      _accuracy = history.isEmpty ? 0 : ((safe / history.length) * 100);
+      _moneyProtected = totalBlockedAmount;
+      _isLoading = false;
+    });
+    _startAnimations();
   }
 
   void _startAnimations() {
@@ -201,9 +251,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                  color: AppTheme.primaryColor, strokeWidth: 2))
+          ? const AppLoadingIndicator(message: "Analyzing Data...")
           : SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 20),
