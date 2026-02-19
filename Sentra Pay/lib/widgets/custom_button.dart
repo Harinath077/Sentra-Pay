@@ -32,8 +32,8 @@ class CustomButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? (useSolid ? AppTheme.primaryColor : Colors.white),
-          foregroundColor: useSolid ? Colors.white : AppTheme.textSecondary,
+          backgroundColor: color ?? (useSolid ? AppTheme.primaryColor : AppTheme.darkCardColor),
+          foregroundColor: useSolid ? Colors.white : Colors.white70,
           elevation: useSolid ? 4 : 0,
           shadowColor: useSolid ? AppTheme.primaryColor.withOpacity(0.4) : null,
           padding: const EdgeInsets.symmetric(vertical: 18), // Taller touch target
@@ -60,7 +60,7 @@ class CustomButton extends StatelessWidget {
                     Icon(
                       icon, 
                       size: 20, 
-                      color: useSolid ? Colors.white : AppTheme.textSecondary,
+                      color: useSolid ? Colors.white : Colors.white70,
                     ),
                     const SizedBox(width: 8),
                   ],
