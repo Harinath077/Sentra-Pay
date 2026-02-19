@@ -88,7 +88,7 @@ class _RiskFactorBreakdownState extends State<RiskFactorBreakdown>
                   const Icon(
                     Icons.analytics_outlined,
                     size: 20,
-                    color: Color(0xFF2563EB),
+                    color: Color(0xFF10B981),
                   ),
                   const SizedBox(width: 8),
                   Text(

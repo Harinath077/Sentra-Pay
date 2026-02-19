@@ -114,9 +114,30 @@ class AuthProvider extends ChangeNotifier {
         'securityId': 'USER-12345',
         'fullName': 'Gopal',
         'email': 'gopal@gmail.com',
-        'mobile': null,
+        'mobile': '9876543210',
         'profilePhotoUrl': null,
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': null,
+        'transactionCount': 5,
+        'trustScore': 98.0,
+        'deviceId': 'DEV-SHIELD-001X',
+        'loginCount': 12,
+        'commonVPAs': ['merchant@upi', 'friend@okaxis'],
+      },
+    },
+  };
+
+  // Phone+PIN demo mapping
+  final Map<String, Map<String, dynamic>> _phoneUsers = {
+    '9876543210': {
+      'pin': '1234',
+      'profile': {
+        'userId': 'UID-DEMO-001',
+        'securityId': 'USER-12345',
+        'fullName': 'Gopal',
+        'email': 'gopal@gmail.com',
+        'mobile': '9876543210',
+        'profilePhotoUrl': null,
+        'createdAt': null,
         'transactionCount': 5,
         'trustScore': 98.0,
         'deviceId': 'DEV-SHIELD-001X',
@@ -232,13 +253,25 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      // Ultimate fallback: Demo mode for testing
-      // Check if credentials match demo account
+      // Check phone+PIN demo users first
+      if (_phoneUsers.containsKey(email)) {
+        final userData = _phoneUsers[email]!;
+        if (userData['pin'] == password) {
+          _currentUser = UserProfile.fromJson(userData['profile']);
+          _token = "demo-token";
+          _isAuthenticated = true;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        }
+      }
+
+      // Fallback: email+password demo users
       if (_users.containsKey(email)) {
         final userData = _users[email]!;
         if (userData['password'] == password) {
           _currentUser = UserProfile.fromJson(userData['profile']);
-          _token = "demo-token"; // Set demo token
+          _token = "demo-token";
           _isAuthenticated = true;
           _isLoading = false;
           notifyListeners();
@@ -252,12 +285,24 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } catch (e) {
       print('Login error: $e');
-      // If all else fails, try demo account
+      // Fallback: check phone+PIN demo
+      if (_phoneUsers.containsKey(email)) {
+        final userData = _phoneUsers[email]!;
+        if (userData['pin'] == password) {
+          _currentUser = UserProfile.fromJson(userData['profile']);
+          _token = "demo-token";
+          _isAuthenticated = true;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        }
+      }
+      // Or check email+password demo
       if (_users.containsKey(email)) {
         final userData = _users[email]!;
         if (userData['password'] == password) {
           _currentUser = UserProfile.fromJson(userData['profile']);
-          _token = "demo-token"; // Set demo token
+          _token = "demo-token";
           _isAuthenticated = true;
           _isLoading = false;
           notifyListeners();

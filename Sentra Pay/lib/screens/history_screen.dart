@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_history.dart';
 import '../theme/app_theme.dart';
-import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_provider.dart';
@@ -19,6 +18,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<Transaction> _history = [];
   bool _isLoading = true;
   String? _errorMessage;
+  double _trustScore = 50.0;
+  String _trustTier = "Bronze";
+
+  IconData _getTierIcon(String tier) {
+    switch (tier) {
+      case 'Gold':
+        return Icons.workspace_premium_rounded;
+      case 'Silver':
+        return Icons.shield_rounded;
+      case 'Platinum':
+        return Icons.diamond_rounded;
+      default:
+        return Icons.verified_user_rounded;
+    }
+  }
 
   @override
   void initState() {
@@ -235,14 +249,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                  colors: [Color(0xFF10B981), Color(0xFF34D399)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.3),
+                    color: const Color(0xFF10B981).withOpacity(0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),

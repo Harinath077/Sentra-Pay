@@ -224,8 +224,8 @@ class _TrendGraphPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFF2563EB).withOpacity(0.3),
-          const Color(0xFF2563EB).withOpacity(0.05),
+          const Color(0xFF10B981).withOpacity(0.3),
+          const Color(0xFF10B981).withOpacity(0.05),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 

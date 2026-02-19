@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'premium_styles.dart';
-import 'premium_device_success_screen.dart';
+import 'premium_set_pin_screen.dart';
 
 class PremiumOTPScreen extends StatefulWidget {
   const PremiumOTPScreen({super.key});
@@ -44,7 +44,7 @@ class _PremiumOTPScreenState extends State<PremiumOTPScreen> {
 
   void _onVerify() {
     Navigator.of(context).push(PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => const PremiumDeviceSuccessScreen(),
+      pageBuilder: (context, animation, secondaryAnimation) => const PremiumSetPinScreen(),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(opacity: animation, child: child);
       },
