@@ -51,6 +51,11 @@
 
 Below is the high-level architecture of Sentra Pay showing how components integrate:
 
+![System Architecture](docs/screenshots/system_architecture.png)
+
+<details>
+<summary>🛠️ View Source Mermaid Diagram Code</summary>
+
 ```mermaid
 graph TD
     subgraph Client [📱 Client Layer - Flutter Frontend]
@@ -98,6 +103,7 @@ graph TD
     FastAPI -- "Record Transaction" --> Postgres
     Postgres -- "Chained Blocks" --> Ledger
 ```
+</details>
 
 ---
 
