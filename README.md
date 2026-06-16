@@ -46,11 +46,11 @@
 
 ---
 
-## 📐 System Block & ML Pipeline Diagram
+## 📐 System Block Diagram
 
-Below is the high-level ML pipeline and training workflow of Sentra Pay showing how components integrate:
+Below is the high-level system architecture of Sentra Pay showing how components integrate:
 
-![ML Pipeline & Workflow](docs/screenshots/ml_pipeline.jpg)
+![System Block Diagram](docs/screenshots/system_architecture.png)
 
 <details>
 <summary>🛠️ View Source Mermaid Diagram Code</summary>
@@ -108,7 +108,7 @@ graph TD
 
 This sequence diagram outlines the interactive message passing during a single transaction assessment:
 
-![Sequence Flow Diagram](docs/screenshots/sequence_flow.jpg)
+![Sequence Flow Diagram](docs/screenshots/sequence_flow.png)
 
 <details>
 <summary>🛠️ View Source Mermaid Sequence Diagram Code</summary>
