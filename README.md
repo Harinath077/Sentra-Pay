@@ -1,4 +1,4 @@
-# 🛡️ Sentra Pay (DeepBlue Shield)
+# 🛡️ Sentra Pay
 > **Intelligent, Real-time UPI Fraud Prevention | Advanced Risk Orchestration Engine**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
@@ -7,7 +7,7 @@
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
 
-**Sentra Pay** (also known as DeepBlue Shield) is an advanced UPI fraud prevention system that assesses transaction risk **BEFORE** payment execution. Unlike traditional post-facto fraud systems, Sentra Pay intercepts threats in real time using a weighted combination of rule-based intelligence, machine learning (CatBoost), geo-velocity calculations, and Generative AI explanations (Project "Gemini Banana").
+**Sentra Pay** is an advanced UPI fraud prevention system that assesses transaction risk **BEFORE** payment execution. Unlike traditional post-facto fraud systems, Sentra Pay intercepts threats in real time using a weighted combination of rule-based intelligence, machine learning (CatBoost), and geo-velocity calculations.
 
 ---
 
@@ -33,8 +33,7 @@
        ▼                                ▼
 [Risk Orchestrator] ◄───────────────────┘
        ├─► [Rules Engine] (Velocity, Geo-velocity, Amount anomalies)
-       ├─► [ML Engine] (CatBoost inference on 7 core features)
-       └─► [GenAI Explainer] (Gemini Banana generates user-friendly descriptions)
+       └─► [ML Engine] (CatBoost inference on 7 core features)
        │
        ▼
 [Decision Engine] (Aggregates weighted scores & applies transaction friction)
@@ -77,7 +76,6 @@ graph TD
         Orch[Risk Orchestrator]
         Rules[📏 Rules Engine]
         ML[🤖 ML Engine - CatBoost]
-        GenAI[🍌 GenAI Explainer - Gemini Banana]
         Context[👤 Context Engine]
     end
 
@@ -98,7 +96,6 @@ graph TD
     
     Orch -- "Deterministic Check" --> Rules
     Orchestrator -- "ML Probability" --> ML
-    Orch -- "Natural Explanations" --> GenAI
     
     FastAPI -- "Record Transaction" --> Postgres
     Postgres -- "Chained Blocks" --> Ledger
@@ -121,7 +118,6 @@ sequenceDiagram
     participant DB as 🗄️ Database (PostgreSQL)
     participant Orch as 🧠 Risk Orchestrator
     participant ML as 🤖 CatBoost Model
-    participant Gemini as 🍌 Gemini Banana (GenAI)
 
     User->>App: Input Amount & UPI VPA (or Scan QR)
     App->>API: POST /api/payment/intent (Preview Request)
@@ -145,8 +141,6 @@ sequenceDiagram
         Orch->>Orch: Evaluate Rules (Velocity, Travel, Anomalies)
         Orch->>ML: engineer_features() & predict()
         ML-->>Orch: Fraud Probability (0.0 - 1.0)
-        Orch->>Gemini: generate_explanation(flags, score)
-        Gemini-->>Orch: Dynamic Natural Language Warning
     end
 
     Orch-->>API: Return Combined Risk Details & Friction Choice
