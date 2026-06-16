@@ -228,6 +228,27 @@ This creates a tamper-proof digital ledger within the database, which is checked
 
 ---
 
+## ⚖️ Trust Tier Friction Scaling Matrix
+
+Sentra Pay dynamically adjusts payment friction based on the user's **Trust Score**, which scales through successful transactions and declines during suspicious activity.
+
+| Trust Tier | Score Range | Friction Policy & Dynamic Adjustments |
+|:---:|:---:|---|
+| **🏆 Gold Tier** | `71 - 100` | **Reduced Friction**: <br>• Downgrades `OTP_REQUIRED` ➔ `WARNING` if risk score $< 0.70$<br>• Downgrades `WARNING` ➔ `ALLOW` if risk score $< 0.40$ |
+| **⭐ Silver Tier** | `31 - 70` | **Standard Friction**: <br>• Follows standard system thresholds directly. |
+| **🛡️ Bronze Tier** | `0 - 30` | **Stricter Control**: <br>• Upgrades `WARNING` ➔ `OTP_REQUIRED` if risk score $> 0.50$<br>• Upgrades `ALLOW` ➔ `WARNING` if risk score $> 0.25$ |
+
+---
+
+## 🔒 Security Posture
+
+* **JWT Authentication**: Stateless, secure token-based user verification.
+* **SQL Injection Prevention**: Full SQLAlchemy ORM database queries prevent injection vectors.
+* **Rate Limiting**: Built-in `slowapi` rate limiting prevents automated brute-force attempts on credentials and endpoints.
+* **Input Validation**: Strictly enforced Pydantic schemas validate types and boundary constraints for all API inputs.
+
+---
+
 ## 🚀 Quick Start Developer Guide
 
 Follow this guide to spin up the local development stack of Sentra Pay:
